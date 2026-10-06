@@ -111,6 +111,7 @@ issue > setting & coding > security review > add, commit, push > reviewer & pr-c
 - 実装は `src/` 以下に置く。開発用スクリプトは `src/` の外に置く
 - TDD 厳守（plan > red test > coding > green test）。RSpec・Jest・Go の `testing` 等。フロントの確認は curl・wget --mirror・playwright で行う。テストは `test/pr<番号>/` に作り、対象は開発サーバーとする
 - **コミットの前に必ずセキュリティレビュー**、マージの前に必ず reviewer と pr-checker を実行する。実装・テスト担当のサブエージェントに `git add`・`commit`・`push` をさせない（変更は未コミットで残し、レビュー通過後にコミットする）
+- **上の 2 つはフックで止める**（`.claude/settings.json` の PreToolUse・`.claude/hooks/`）。`git commit` はステージ済み差分のセキュリティレビューの記録が無いと、`gh pr merge` は PR の先頭コミットに reviewer と pr-checker の記録が無いと、実行が止まる。判定できないときも止める。手順は `bash .claude/hooks/run_security_review.sh`（報告を `.claude/state/` に残す）→ 報告を読む → `python3 .claude/hooks/record_pass.py security` → コミット。マージ前の記録は reviewer・pr-checker が完了時に `record_pass.py reviewer|pr-checker <PR番号>` で付ける。**`.claude/` は公開リポジトリのため gitignore 済みで、フックはクローン直後には存在しない。** フックはこのリポジトリをプロジェクトにしたセッション（WSL で `~/github/rictaworks/browser-youtube-live-mvp` から起動）でのみ効く。GitHub 画面からのマージと、`gh api` 経由のマージは止められない
 - アイコンは FontAwesome、絵文字は使用禁止。ネイティブの `alert()`・`confirm()`・`prompt()` は使用禁止（配信中の離脱確認（13.1・17.6）は、ブラウザ標準の離脱確認（`beforeunload`）で行い、この禁止の対象外）
 - フォールバック禁止。例外処理を明示的に書く。デバッグトレースできるようにコードを書く
 - 制御構文・条件構文以外はクラスまたは関数に書く。グローバル変数は禁止。文字列リテラルは設定ファイルへ分離し、ハードコードを検知するテストを書く
@@ -118,6 +119,8 @@ issue > setting & coding > security review > add, commit, push > reviewer & pr-c
 - 日本語版のみ開発する。コンテンツはですます調（本事業は B2B）。時刻は JST、エンコードは UTF-8
 - 連絡先に個人名を使わない。メールは `info@rictaworks.jp`
 - README.md と `SPEC/` に未実装のものを書かない。README.md にはページ一覧（ページ名・URL）と API 一覧（タイトル・エンドポイント URL）を記載する
+- **画面の見た目は `app-ui/` のモックに従い、`src/` に再現して裏につなぐ**。モックは見た目の正本で、仕様ではない。仕様は requirements.md が正で、食い違いは requirements.md に従ってモックを直す。出どころと、入れていないもの（実行時 `support.js`・フォント・画像）は `app-ui/README.md`
+- 運用フォルダ：`SPEC/`（仕様書とリバースエンジニアリングの図。実装済みの内容だけ。図は Mermaid。**コミット対象**）、`TASKS/`（タスク）、`DEBUG/`（バグ報告）、`CLIENT/`（クライアントの要望）、`WORK/`（作業報告）、`ENV/`（`DEVELOPMENT.md` 開発環境・`PRODUCTION.md` 本番環境）、`DELETE/`（ゴミ箱。**削除コマンドを使わず、ここへ移す**）。`SPEC/` 以外は公開リポジトリのため gitignore 済み（ローカルのみ）。requirements.md の 21〜26 章の図は**設計**であって、実装済みではない。実装が済んだものだけを `SPEC/` へ移す
 - リリースのバージョンは `メジャー2桁.マイナー2桁.デバッグ2桁`（初期値 `01.01.00`）、タグは最初から `git tag -a`（注釈付き）。必須添付物と、検証・承認の記録（版管理対象のログに残す）は、RictaWorks ワークスペースの開発規程（`20_開発` の `roles.md`）に従う
 - 全 PR のユーザーテストは Claude Desktop の sandbox browser で行い、ログインを要求する。実際の YouTube チャンネルへ配信する手順は、公開範囲を限定公開にし、終了後に YouTube 側で配信が閉じたことまで確認する
 - 公式サイト（`rictaworks.jp`）への掲載は、本人の明示的な指示があるまで行わない
@@ -158,7 +161,7 @@ Gemini・GPT・Jev・画像生成の API を呼ぶ処理は、RictaWorks ワー�
 | U5 | **外部事実のファクトチェック**。requirements.md 3 章の表（YouTube API の割り当て・OAuth の審査条件・Railway と Vercel の無料枠・WebCodecs の対応状況）は GPT のファクトチェックが未実施。実施前にコスト管理の 5 項目（単価表・最安モデル・台帳・予算）を整える |
 | U6 | **外部アカウントとドメイン**。Google Cloud の OAuth クライアント（同意画面は本番、YouTube スコープの審査は公開済みの利用規約・プライバシーポリシーと所有確認済みのドメインが前提。requirements.md 31 章）、reCAPTCHA のキー、公開ドメイン（原則 `rictaworks.jp` のサブドメイン。名前は未決）。本人の作業を含む |
 | U7 | **デモ共通 UI の必須 4 要素の適用有無**。RictaWorks ワークスペースのデモ共通 UI 規程（`20_開発` の `demo-common-ui.md`）はデモ向けで、MVP への適用は未確認。実装が終わってから抜けに気づく事態を避けるため、最初の実装 Issue の前に確認する |
-| U8 | **コミット前・マージ前のフック**。`ClaudeCode.md` が求めるセキュリティレビューと reviewer・pr-checker のフックは未設置。要否は本人が決める |
+| U8 | （解決済み・2026-10-06）コミット前・マージ前のフックは `ClaudeCode.md` の指示どおり設置した。開発フロー節を参照。要否を本人に確認する項目ではなかった |
 | U9 | **ユーザーテストのログイン方式**。全 PR のユーザーテストはログインを要求するが、Google が自動操作のブラウザからのログインを拒む可能性がある（未検証）。拒まれる場合の手順を決める |
 | U10 | **旧 `rictaworks/browser-youtube-live` との関係**。public のまま 2026-06-20 以降更新がなく、「設計からやり直す予定」（2026-08-20 本人決定）とされていた。本リポジトリが後継かどうか、旧リポジトリの扱い（アーカイブ・README での誘導）は本人が決める |
 

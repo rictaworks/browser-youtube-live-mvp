@@ -1,0 +1,31 @@
+:root {
+  --sp-4: 4px; /* @kind spacing */
+  --sp-6: 6px; /* @kind spacing */
+  --sp-8: 8px; /* @kind spacing */
+  --sp-12: 12px; /* @kind spacing */
+  --sp-16: 16px; /* @kind spacing */
+  --sp-20: 20px; /* @kind spacing */
+  --sp-24: 24px; /* @kind spacing */
+  --sp-28: 28px; /* @kind spacing */
+  --sp-36: 36px; /* @kind spacing */
+  --sp-40: 40px; /* @kind spacing */
+  --sp-50: 50px; /* @kind spacing */
+  --sp-60: 60px; /* @kind spacing */
+  --sp-80: 80px; /* @kind spacing */
+  --sp-100: 100px; /* @kind spacing */
+
+  --section-pad-y: 100px; /* @kind spacing */
+  --section-pad-x: 40px; /* @kind spacing */
+  --section-pad-x-mobile: 20px; /* @kind spacing */
+  --nav-pad: 20px 40px; /* @kind spacing */
+  --container-max: 1100px; /* @kind spacing */
+  --container-roadmap: 900px; /* @kind spacing */
+  --container-faq: 800px; /* @kind spacing */
+  --container-hero: 800px; /* @kind spacing */
+  --breakpoint-mobile: 768px; /* @kind spacing */
+
+  --radius-none: 0; /* @kind radius */
+  --radius-2: 2px; /* @kind radius */
+  --radius-11: 11px; /* @kind radius */
+  --radius-full: 50%; /* @kind radius */
+}

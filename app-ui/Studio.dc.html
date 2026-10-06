@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet data-dc-atomics>
+        <link rel="stylesheet" href="styles.css">
+        <style>
+          :root{--live:oklch(0.72 0.2 22);--live-bg:oklch(0.72 0.2 22 / 0.12);--warn:oklch(0.84 0.15 85);--warn-bg:oklch(0.84 0.15 85 / 0.1)}
+          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.6}
+          a{color:var(--silver);text-decoration:none}
+          a:hover{color:var(--teal)}
+          i{font-style:normal}
+          i[class=""]{display:none}
+          .mock{position:sticky;top:0;z-index:70;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 40px;background:var(--bg-footer);border-bottom:1px dashed var(--silver-30)}
+          .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;color:var(--silver-70);margin-right:6px}
+          .mock .sp{flex:1}
+          .tab{font:500 11px/1 var(--font-sans);padding:7px 10px;color:var(--silver);background:transparent;border:1px solid var(--silver-30);cursor:pointer;letter-spacing:.05em}
+          .tab.on{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
+          .tab.lk{border-style:dashed}
+          .top{display:flex;align-items:center;justify-content:space-between;padding:18px 40px}
+          .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
+          .wm b{color:var(--teal);font-weight:600}
+          .nav{display:flex;gap:28px;align-items:center}
+          .nav a{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
+          .nav a.on{color:var(--teal);text-shadow:var(--text-glow-step)}
+          .pill{display:inline-flex;gap:8px;align-items:center;font-size:12px;letter-spacing:.05em;padding:6px 12px;border:1px solid var(--silver-30);color:var(--silver)}
+          .studio{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;padding:8px 40px 40px;max-width:1360px;margin:0 auto}
+          .stack{display:flex;flex-direction:column;gap:16px;min-width:0}
+          .head{display:flex;align-items:baseline;gap:16px;padding:8px 0 4px}
+          .h1{font:700 40px/1.1 var(--font-display);color:var(--white)}
+          .h1 em{color:var(--teal);font-style:italic;text-shadow:var(--text-glow-hero-em)}
+          .sub{color:var(--silver-70);font-size:13px}
+          .eb{font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
+          .eb::after{content:"";flex:1;height:1px;background:var(--silver-10)}
+          .card{border:1px solid var(--border);background:var(--card-bg);padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+          .pv{position:relative;aspect-ratio:16/9;border:1px solid var(--border);background:var(--bg2);overflow:hidden}
+          .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(135deg,var(--teal-04) 0 12px,transparent 12px 24px);font:11px ui-monospace,Menlo,monospace;color:var(--silver-70);letter-spacing:.1em;text-align:center;line-height:1.7}
+          .ph.wipe{inset:auto 18px 18px auto;width:22%;aspect-ratio:16/9;border:1px solid var(--silver-30);background-color:var(--navy-95)}
+          .badge{position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--navy-95);border:1px solid var(--silver-40);font:600 12px var(--font-sans);letter-spacing:.1em;z-index:2;font-variant-numeric:tabular-nums}
+          .badge.live{border-color:var(--live)}
+          .badge.live i{color:var(--live)}
+          .badge.warn{border-color:var(--warn)}
+          .badge.warn i{color:var(--warn)}
+          .badge.go i{color:var(--teal)}
+          .ctl{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:16px 22px;border:1px solid var(--border);background:var(--card-bg)}
+          .grow{flex:1;min-width:200px}
+          .btn{font:600 12px/1 var(--font-sans);letter-spacing:.2em;padding:15px 28px;border:1px solid var(--silver-30);background:transparent;color:var(--silver);cursor:pointer;transition:var(--dur-fast);display:inline-flex;align-items:center;gap:10px}
+          .btn:hover{color:var(--teal);border-color:var(--teal)}
+          .btn:focus-visible{outline:2px solid var(--white);outline-offset:3px}
+          .btn.pri{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
+          .btn.pri:hover{background:var(--teal-dim);box-shadow:var(--glow-cta)}
+          .btn.stop{color:var(--white);border-color:var(--live);background:var(--live-bg)}
+          .btn.stop:hover{box-shadow:0 0 24px oklch(0.72 0.2 22 / 0.3)}
+          .btn.dis{color:var(--silver-70);border-color:var(--silver-20);cursor:not-allowed}
+          .btn.dis:hover{color:var(--silver-70);border-color:var(--silver-20);box-shadow:none}
+          .btn.sm{padding:9px 14px;font-size:11px;letter-spacing:.12em}
+          .why{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--silver)}
+          .why i{color:var(--warn);margin-top:3px}
+          .url{display:flex;align-items:center;gap:12px;flex:1;min-width:240px;padding:10px 14px;border:1px solid var(--silver-20);background:var(--bg);font-size:13px;color:var(--white);font-variant-numeric:tabular-nums}
+          .url span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+          .srcs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+          .src{border:1px solid var(--border);background:var(--card-bg);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+          .src .n{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--white)}
+          .src .n i{color:var(--teal);text-shadow:var(--text-glow-icon);width:18px;text-align:center}
+          .dev{font-size:12px;color:var(--silver);padding:8px 10px;border:1px solid var(--silver-20);background:var(--bg);display:flex;justify-content:space-between;gap:8px}
+          .chip{display:inline-flex;gap:6px;align-items:center;align-self:flex-start;font-size:11px;letter-spacing:.08em;padding:3px 9px;border:1px solid var(--silver-30);color:var(--silver)}
+          .chip.ok{border-color:var(--teal-50);color:var(--teal)}
+          .chip.warn{border-color:var(--warn);color:var(--warn)}
+          .hg{display:grid;grid-template-columns:1fr 1fr;gap:16px 14px}
+          .m .l{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--silver-70)}
+          .m .v{font:500 22px/1.2 var(--font-sans);color:var(--white);font-variant-numeric:tabular-nums}
+          .m .v small{font-size:11px;color:var(--silver-70);margin-left:4px;letter-spacing:.05em}
+          .m.warn .v{color:var(--warn)}
+          .m.warn .l{color:var(--warn)}
+          .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--silver-08)}
+          .kv span:first-child{color:var(--silver-70)}
+          .kv b{font-weight:500;color:var(--white);font-variant-numeric:tabular-nums;text-align:right}
+          .log{list-style:none;display:flex;flex-direction:column;gap:10px;font-size:13px}
+          .log li{display:flex;gap:10px;align-items:flex-start;color:var(--silver)}
+          .log time{font-variant-numeric:tabular-nums;color:var(--silver-70);flex:none;width:42px}
+          .log time:empty{display:none}
+          .log li i{font-size:10px;margin-top:6px;width:12px;text-align:center;flex:none}
+          .log i.w{color:var(--warn)}
+          .log i.t{color:var(--teal)}
+          .stages{list-style:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;width:100%}
+          .stg{border-top:2px solid var(--silver-20);padding-top:10px;font-size:12px;color:var(--silver-70);line-height:1.6}
+          .stg b{display:block;font-size:10px;letter-spacing:.2em;font-weight:600;margin-bottom:4px;text-transform:uppercase}
+          .stg.done{border-top-color:var(--teal-50);color:var(--silver)}
+          .stg.done b{color:var(--teal)}
+          .stg.now{border-top-color:var(--teal);color:var(--white)}
+          .stg.now b{color:var(--teal);text-shadow:var(--text-glow-step)}
+          .banner{display:flex;gap:14px;align-items:flex-start;padding:14px 18px;border:1px solid var(--warn);background:var(--warn-bg);font-size:13px;color:var(--white)}
+          .banner i{color:var(--warn);margin-top:3px}
+          .banner.info{border-color:var(--teal-50);background:var(--teal-05)}
+          .banner.info i{color:var(--teal)}
+          .end{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}
+          .overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(5,8,16,.84);backdrop-filter:blur(8px)}
+          .dlg{width:min(560px,100%);border:1px solid var(--border);background:var(--bg2);box-shadow:var(--glow-card);padding:28px 32px;display:flex;flex-direction:column;gap:18px}
+          .dlg h2{font:700 30px/1.15 var(--font-display)}
+          .fld{display:flex;flex-direction:column;gap:8px}
+          .fld label{font-size:11px;letter-spacing:.15em;color:var(--silver-70);display:flex;justify-content:space-between}
+          .fld input{font:14px var(--font-sans);color:var(--white);background:var(--bg);border:1px solid var(--silver-30);padding:11px 14px}
+          .fld input:focus{outline:2px solid var(--white);outline-offset:2px;border-color:var(--teal)}
+          .seg{display:flex}
+          .seg button{flex:1;font:500 13px var(--font-sans);padding:11px 8px;color:var(--silver);background:transparent;border:1px solid var(--silver-30);margin-left:-1px;cursor:pointer}
+          .seg button.on{color:var(--teal);border-color:var(--teal);background:var(--teal-05);position:relative}
+          .note{font-size:12px;color:var(--silver-70)}
+          .list{list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--silver);padding:12px 14px;border:1px solid var(--silver-10);background:var(--bg)}
+          .list li{display:flex;gap:10px}
+          .list li i{color:var(--teal);margin-top:4px;font-size:10px}
+          .acts{display:flex;gap:12px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
+          .un{width:100%;max-width:760px;margin:40px auto;padding:0 40px;display:flex;flex-direction:column;gap:20px}
+          .cap{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--silver-08);font-size:14px}
+          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+          @media (max-width:1023px){.studio{grid-template-columns:minmax(0,1fr)}.srcs{grid-template-columns:1fr}.stages{grid-template-columns:repeat(2,minmax(0,1fr))}.end{grid-template-columns:repeat(2,minmax(0,1fr))}.top,.mock{padding-left:20px;padding-right:20px}.studio{padding-left:20px;padding-right:20px}}
+        </style>
+      </helmet>
+      <div data-screen-label="Studio" style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column">
+        <div class="mock">
+          <span class="tag">MOCK STATE</span>
+          <sc-for list="{{ tabs }}" as="t">
+            <button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button>
+          </sc-for>
+          <span class="sp"></span>
+          <a class="tab lk" href="Landing.dc.html">Landing</a>
+          <a class="tab lk" href="Account.dc.html">Account</a>
+        </div>
+        <header class="top">
+          <div class="wm">Browser <b>Live</b></div>
+          <nav class="nav">
+            <a class="on" href="#">Studio</a>
+            <a href="Account.dc.html">Account</a>
+            <span class="pill"><i class="fa-regular fa-clock"></i>本日の利用枠 {{ usageText }}</span>
+          </nav>
+        </header>
+        <sc-if value="{{ isUnsupported }}">
+          <div class="un">
+            <div class="eb">Environment</div>
+            <h1 class="h1">Not <em>Supported.</em></h1>
+            <p class="sub" style="font-size:14px;line-height:1.9">このブラウザでは配信を開始できません。配信に必要な能力が不足しています。代替の経路はありません。</p>
+            <div class="card">
+              <div class="eb">Capabilities</div>
+              <div class="cap"><span>H.264 の映像エンコード</span><span class="chip warn"><i class="fa-solid fa-xmark"></i>不足</span></div>
+              <div class="cap"><span>AAC-LC の音声エンコード（44.1 kHz・2 ch）</span><span class="chip ok"><i class="fa-solid fa-check"></i>利用可</span></div>
+              <div class="cap"><span>ワーカー上でのフレーム取得と描画</span><span class="chip warn"><i class="fa-solid fa-xmark"></i>不足</span></div>
+              <div class="cap"><span>WebSocket</span><span class="chip ok"><i class="fa-solid fa-check"></i>利用可</span></div>
+            </div>
+            <div class="banner info"><i class="fa-solid fa-circle-info"></i><div>保証する環境は、デスクトップ向けの Chrome・Edge の最新版です。モバイルは保証しません。画面共有 API が提供されず、画面の消灯やアプリの切り替えで取得が止まるためです。</div></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showStudio }}">
+          <main class="studio">
+            <div class="stack">
+              <div class="head"><h1 class="h1">Studio</h1><span class="sub">{{ headSub }}</span></div>
+              <div class="pv">
+                <sc-if value="{{ isCamOnly }}"><div class="ph">CAMERA — placeholder<br>実際の送出と同一の構図</div></sc-if>
+                <sc-if value="{{ isComposite }}">
+                  <div class="ph">SCREEN SHARE · 主映像 — placeholder</div>
+                  <div class="ph wipe">CAMERA<br>wipe</div>
+                </sc-if>
+                <sc-if value="{{ isEnded }}"><div class="ph">配信は終了しました</div></sc-if>
+                <sc-if value="{{ isCamOnly }}"><div class="badge"><i class="fa-regular fa-circle"></i>待機</div></sc-if>
+                <sc-if value="{{ isStarting }}"><div class="badge go"><i class="fa-solid fa-circle-notch"></i>計測中</div></sc-if>
+                <sc-if value="{{ isLive }}"><div class="badge live"><i class="fa-solid fa-circle"></i>LIVE<span>12:34</span></div></sc-if>
+                <sc-if value="{{ isDegraded }}"><div class="badge warn"><i class="fa-solid fa-triangle-exclamation"></i>劣化<span>31:08</span></div></sc-if>
+                <sc-if value="{{ isEnded }}"><div class="badge"><i class="fa-solid fa-stop"></i>終了</div></sc-if>
+              </div>
+              <sc-if value="{{ isDegraded }}">
+                <div class="banner"><i class="fa-solid fa-triangle-exclamation"></i><div><b>送出ビットレートが目標を下回っています。</b> 回線が下限を下回った場合は劣化の表示のうえ配信を継続し、映像が届かない状態が続けば終了します。画面共有が終了したため、映像はカメラのみで継続しています。</div></div>
+              </sc-if>
+              <sc-if value="{{ isNoConnect }}">
+                <div class="ctl">
+                  <button class="btn dis">配信を開始</button>
+                  <div class="why grow"><i class="fa-solid fa-triangle-exclamation"></i><div>YouTube が未接続のため、配信を開始できません。右の案内から YouTube を接続してください。接続前でも、ソースの準備とプレビューは使えます。</div></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ isReady }}">
+                <div class="ctl">
+                  <button class="btn pri" onClick="{{ toDialog }}"><i class="fa-solid fa-angles-right"></i>配信を開始</button>
+                  <div class="grow note" style="font-size:13px">ソース 2 件を取得済み。タイトルと公開範囲は次の画面で確認します。</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ isStarting }}">
+                <div class="ctl" style="flex-direction:column;align-items:stretch">
+                  <ol class="stages">
+                    <sc-for list="{{ stages }}" as="g"><li class="{{ g.cls }}"><b>{{ g.en }}</b>{{ g.text }}</li></sc-for>
+                  </ol>
+                  <div class="acts" style="justify-content:space-between">
+                    <span class="note">回線の計測結果：標準（720p）・映像 4,500 kbps から開始。ライブ確定前の取り消しは、利用枠を消費しません。</span>
+                    <button class="btn sec" onClick="{{ toIdle }}">取り消し</button>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ isLiveCtl }}">
+                <div class="ctl">
+                  <button class="btn stop" onClick="{{ toEnded }}"><i class="fa-solid fa-stop"></i>配信を停止</button>
+                  <div class="url"><i class="fa-solid fa-link" style="color:var(--teal)"></i><span>https://youtube.com/live/xxxxxxxxxxx</span><button class="btn sm"><i class="fa-regular fa-copy"></i>複製</button></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ isEnded }}">
+                <div class="ctl" style="flex-direction:column;align-items:stretch;gap:16px">
+                  <div class="eb">Summary</div>
+                  <div class="end">
+                    <div class="m"><div class="l">終了理由</div><div class="v" style="font-size:16px">利用者の操作</div></div>
+                    <div class="m"><div class="l">配信時間</div><div class="v">31:42</div></div>
+                    <div class="m"><div class="l">YouTube 上の配信</div><div class="v" style="font-size:16px"><a href="#" style="color:var(--teal)">YouTube で開く <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div></div>
+                    <div class="m"><div class="l">次に開始できる時刻</div><div class="v" style="font-size:16px">明日 03:00 JST</div></div>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ showSources }}">
+                <div class="eb">Sources</div>
+                <div class="srcs">
+                  <sc-for list="{{ sources }}" as="s">
+                    <div class="src">
+                      <div class="n"><i class="{{ s.icon }}"></i>{{ s.name }}</div>
+                      <span class="{{ s.chipCls }}"><i class="{{ s.chipIcon }}"></i>{{ s.chipText }}</span>
+                      <div class="dev"><span>{{ s.device }}</span><i class="fa-solid fa-chevron-down"></i></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </sc-if>
+            </div>
+            <aside class="stack">
+              <div class="card">
+                <div class="eb">Health</div>
+                <div class="hg">
+                  <sc-for list="{{ metrics }}" as="x"><div class="{{ x.cls }}"><div class="l">{{ x.label }}</div><div class="v">{{ x.value }}<small>{{ x.unit }}</small></div></div></sc-for>
+                </div>
+              </div>
+              <div class="card">
+                <div class="eb">Usage</div>
+                <div class="kv"><span>利用枠の残り</span><b>{{ usageText }}</b></div>
+                <div class="kv"><span>次に開始できる時刻</span><b>{{ usageNext }}</b></div>
+                <div class="kv" style="border-bottom:0"><span>当月の受付</span><b>受付中</b></div>
+              </div>
+              <sc-if value="{{ isNoConnect }}">
+                <div class="card" style="border-color:var(--warn)">
+                  <div class="eb">YouTube</div>
+                  <div class="why"><i class="fa-solid fa-triangle-exclamation"></i><div>YouTube が未接続です。接続すると、配信枠の作成と終了の清算に、あなたのチャンネルの権限を使います。配信キーは扱いません。</div></div>
+                  <button class="btn pri sm"><i class="fa-brands fa-youtube"></i>YouTube を接続</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ isConnected }}">
+                <div class="card">
+                  <div class="eb">YouTube</div>
+                  <div class="kv"><span>接続</span><b style="color:var(--teal)"><i class="fa-solid fa-check"></i> 接続済み</b></div>
+                  <div class="kv" style="border-bottom:0"><span>ライブ配信</span><b>有効</b></div>
+                </div>
+              </sc-if>
+              <div class="card">
+                <div class="eb">Log</div>
+                <ul class="log">
+                  <sc-for list="{{ logs }}" as="e"><li><time>{{ e.t }}</time><i class="{{ e.icon }}"></i><span>{{ e.text }}</span></li></sc-for>
+                </ul>
+              </div>
+            </aside>
+          </main>
+        </sc-if>
+        <sc-if value="{{ isDialog }}">
+          <div class="overlay">
+            <div class="dlg" data-screen-label="Start dialog">
+              <div class="eb">Start</div>
+              <h2>Go <em style="color:var(--teal);text-shadow:var(--text-glow-hero-em)">Live.</em></h2>
+              <div class="fld"><label><span>タイトル</span><span style="font-variant-numeric:tabular-nums">残り 80 文字</span></label><input value="ブラウザからの配信 2026-10-06"></div>
+              <div class="fld"><label><span>公開範囲</span><span>既定：限定公開</span></label>
+                <div class="seg"><button>公開</button><button class="on">限定公開</button><button>非公開</button></div>
+              </div>
+              <div class="fld"><label><span>子ども向けの申告</span><span>必須</span></label>
+                <div class="seg"><button class="{{ kidYesCls }}" onClick="{{ pickYes }}">はい</button><button class="{{ kidNoCls }}" onClick="{{ pickNo }}">いいえ</button></div>
+              </div>
+              <ul class="list">
+                <li><i class="fa-solid fa-square"></i>1 配信の時間上限は 60 分です。</li>
+                <li><i class="fa-solid fa-square"></i>1 日 1 回の利用枠は、YouTube でライブが確定した時点で消費します。</li>
+                <li><i class="fa-solid fa-square"></i>配信は、あなたのチャンネルに、選んだ公開範囲のとおり掲載されます。</li>
+              </ul>
+              <div class="acts">
+                <span class="note grow">{{ dlgNote }}</span>
+                <button class="btn sec" onClick="{{ toIdle }}">キャンセル</button>
+                <button class="{{ startCls }}" onClick="{{ startGo }}">配信を開始</button>
+              </div>
+            </div>
+          </div>
+        </sc-if>
+        <footer class="foot" style="margin-top:auto"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a></footer>
+      </div>
+    </x-dc>
+    <script type="text/x-dc" data-dc-script data-props='{
+  "$preview": { "width": 1440, "height": 900 }
+}'>
+      class Component extends DCLogic {
+        renderVals() {
+          const st = this.state || {};
+          const s = st.s || 'idle';
+          const kid = st.kid || '';
+          const go = (k) => () => this.setState({ s: k });
+          const defs = [['idle','待機'],['noconnect','YouTube 未接続'],['dialog','開始ダイアログ'],['starting','開始中'],['live','配信中'],['degraded','劣化'],['ended','終了'],['unsupported','非対応環境']];
+          const tabs = defs.map(([k, l]) => ({ label: l, cls: s === k ? 'tab on' : 'tab', go: go(k) }));
+          const isLive = s === 'live', isDegraded = s === 'degraded', isEnded = s === 'ended', isStarting = s === 'starting';
+          const isNoConnect = s === 'noconnect', isDialog = s === 'dialog', isUnsupported = s === 'unsupported';
+          const isReady = s === 'idle' || s === 'dialog';
+          const isCamOnly = s === 'idle' || s === 'noconnect' || s === 'dialog';
+          const isComposite = isStarting || isLive || isDegraded;
+          const spent = isLive || isDegraded || isEnded;
+          const ok = { chipCls: 'chip ok', chipIcon: 'fa-solid fa-check', chipText: '取得済み' };
+          const none = { chipCls: 'chip', chipIcon: 'fa-regular fa-circle', chipText: '未取得' };
+          const lost = { chipCls: 'chip warn', chipIcon: 'fa-solid fa-triangle-exclamation', chipText: '喪失' };
+          const screen = (isLive || isStarting) ? ok : (isDegraded ? lost : none);
+          const sources = [
+            Object.assign({ icon: 'fa-solid fa-video', name: 'カメラ', device: 'Integrated Camera' }, ok),
+            Object.assign({ icon: 'fa-solid fa-microphone', name: 'マイク', device: 'Default - Microphone' }, ok),
+            Object.assign({ icon: 'fa-solid fa-display', name: '画面共有', device: isDegraded ? '共有が終了しました' : (screen === ok ? 'ウィンドウ：Slides' : '共有する画面を選択') }, screen)
+          ];
+          const dash = '—';
+          const metrics = isLive ? [
+            { cls: 'm', label: '送出', value: '4,312', unit: 'kbps' }, { cls: 'm', label: '目標', value: '4,500', unit: 'kbps' },
+            { cls: 'm', label: '滞留時間', value: '0.4', unit: 's' }, { cls: 'm', label: '破棄フレーム', value: '0', unit: '' },
+            { cls: 'm', label: '経過', value: '12:34', unit: '' }, { cls: 'm', label: '残り', value: '47:26', unit: '' }
+          ] : isDegraded ? [
+            { cls: 'm warn', label: '送出 ▲', value: '2,740', unit: 'kbps' }, { cls: 'm', label: '目標', value: '3,600', unit: 'kbps' },
+            { cls: 'm warn', label: '滞留時間 ▲', value: '1.8', unit: 's' }, { cls: 'm warn', label: '破棄フレーム ▲', value: '37', unit: '' },
+            { cls: 'm', label: '経過', value: '31:08', unit: '' }, { cls: 'm', label: '残り', value: '28:52', unit: '' }
+          ] : [
+            { cls: 'm', label: '送出', value: dash, unit: '' }, { cls: 'm', label: '目標', value: dash, unit: '' },
+            { cls: 'm', label: '滞留時間', value: dash, unit: '' }, { cls: 'm', label: '破棄フレーム', value: dash, unit: '' },
+            { cls: 'm', label: '経過', value: isEnded ? '31:42' : dash, unit: '' }, { cls: 'm', label: '残り', value: dash, unit: '' }
+          ];
+          const logs = isDegraded ? [
+            { t: '31:02', icon: 'fa-solid fa-triangle-exclamation w', text: '送出が目標を下回りました。ビットレートを抑制中' },
+            { t: '28:45', icon: 'fa-solid fa-triangle-exclamation w', text: '画面共有が終了しました。映像の構成から外して継続' },
+            { t: '00:12', icon: 'fa-solid fa-circle t', text: '配信が確定しました' }
+          ] : isLive ? [
+            { t: '00:12', icon: 'fa-solid fa-circle t', text: '配信が確定しました' },
+            { t: '00:00', icon: 'fa-solid fa-check t', text: '回線を計測。標準（720p）で開始' }
+          ] : isEnded ? [
+            { t: '31:42', icon: 'fa-solid fa-stop t', text: '利用者の操作で停止しました' },
+            { t: '00:12', icon: 'fa-solid fa-circle t', text: '配信が確定しました' }
+          ] : [ { t: '', icon: '', text: 'まだ出来事はありません' } ];
+          const names = [['受付','Accept','開始の条件を確認'], ['接続','Connect','中継へ接続'], ['計測','Probe','回線を計測'], ['準備','Prepare','YouTube の配信を準備'], ['確定','Confirm','ライブになるのを待機'], ['配信中','Live','視聴 URL と経過時間']];
+          const stages = names.map(([jp, en, tx], i) => ({ cls: i < 2 ? 'stg done' : (i === 2 ? 'stg now' : 'stg'), en: en, text: jp + '：' + tx }));
+          const kidOk = kid === 'yes' || kid === 'no';
+          return {
+            tabs, isLive, isDegraded, isEnded, isStarting, isNoConnect, isDialog, isUnsupported, isReady, isCamOnly, isComposite,
+            isLiveCtl: isLive || isDegraded,
+            showStudio: !isUnsupported,
+            showSources: !isUnsupported && !isEnded,
+            isConnected: !isNoConnect,
+            headSub: isLive || isDegraded ? '配信中' : isEnded ? '配信は終了しました' : isStarting ? '配信を準備しています' : '準備ができたら配信を開始します',
+            usageText: spent ? '0 / 1' : '1 / 1',
+            usageNext: spent ? '明日 03:00 JST' : '今すぐ',
+            sources, metrics, logs, stages,
+            toDialog: go('dialog'), toIdle: go('idle'), toEnded: go('ended'),
+            pickYes: () => this.setState({ kid: 'yes' }), pickNo: () => this.setState({ kid: 'no' }),
+            kidYesCls: kid === 'yes' ? 'on' : '', kidNoCls: kid === 'no' ? 'on' : '',
+            startCls: kidOk ? 'btn pri' : 'btn dis',
+            startGo: kidOk ? go('starting') : () => {},
+            dlgNote: kidOk ? '' : '子ども向けかどうかを選ぶと、開始できます。'
+          };
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,4 @@
+/* Noto Sans JP (124 unicode-range subsets per weight) stays on the Google Fonts CDN, exactly as the site loads it.
+   Inter + Playfair Display are self-hosted in fonts-local.css. Font Awesome 6.5.0 from cdnjs as on the site. */
+@import url("https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@300;400;700&display=swap");
+@import url("https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css");

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet data-dc-atomics>
+        <link rel="stylesheet" href="styles.css">
+        <style>
+          :root{--live:oklch(0.72 0.2 22);--live-bg:oklch(0.72 0.2 22 / 0.12);--warn:oklch(0.84 0.15 85);--warn-bg:oklch(0.84 0.15 85 / 0.1)}
+          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.6}
+          a{color:var(--silver);text-decoration:none}
+          a:hover{color:var(--teal)}
+          i{font-style:normal}
+          .mock{position:sticky;top:0;z-index:70;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 40px;background:var(--bg-footer);border-bottom:1px dashed var(--silver-30)}
+          .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;color:var(--silver-70);margin-right:6px}
+          .tab{font:500 11px/1 var(--font-sans);padding:7px 10px;color:var(--silver);background:transparent;border:1px solid var(--silver-30);cursor:pointer;letter-spacing:.05em}
+          .tab.on{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
+          .top{display:flex;align-items:center;justify-content:space-between;padding:18px 40px}
+          .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
+          .wm b{color:var(--teal);font-weight:600}
+          .nav{display:flex;gap:28px;align-items:center}
+          .nav a{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
+          .nav a.on{color:var(--teal);text-shadow:var(--text-glow-step)}
+          .page{width:100%;max-width:860px;margin:0 auto;padding:16px 40px 60px;display:flex;flex-direction:column;gap:20px}
+          .h1{font:700 40px/1.1 var(--font-display)}
+          .sub{color:var(--silver-70);font-size:13px;margin-left:16px}
+          .eb{font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
+          .eb::after{content:"";flex:1;height:1px;background:var(--silver-10)}
+          .card{border:1px solid var(--border);background:var(--card-bg);padding:22px 26px;display:flex;flex-direction:column;gap:16px}
+          .card.danger{border-color:var(--live)}
+          .kv{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:8px 0;border-bottom:1px solid var(--silver-08);align-items:center}
+          .kv span:first-child{color:var(--silver-70)}
+          .kv b{font-weight:500;color:var(--white);text-align:right}
+          .chip{display:inline-flex;gap:6px;align-items:center;font-size:12px;letter-spacing:.08em;padding:4px 10px;border:1px solid var(--silver-30);color:var(--silver)}
+          .chip.ok{border-color:var(--teal-50);color:var(--teal)}
+          .chip.warn{border-color:var(--warn);color:var(--warn)}
+          .chip.bad{border-color:var(--live);color:var(--white)}
+          .chip.bad i{color:var(--live)}
+          .btn{font:600 12px/1 var(--font-sans);letter-spacing:.15em;padding:14px 24px;border:1px solid var(--silver-30);background:transparent;color:var(--silver);cursor:pointer;transition:var(--dur-fast);display:inline-flex;align-items:center;gap:10px}
+          .btn:hover{color:var(--teal);border-color:var(--teal)}
+          .btn:focus-visible{outline:2px solid var(--white);outline-offset:3px}
+          .btn.pri{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
+          .btn.pri:hover{background:var(--teal-dim);box-shadow:var(--glow-cta)}
+          .btn.stop{color:var(--white);border-color:var(--live);background:var(--live-bg)}
+          .btn.dis{color:var(--silver-70);border-color:var(--silver-20);cursor:not-allowed}
+          .btn.dis:hover{color:var(--silver-70);border-color:var(--silver-20);box-shadow:none}
+          .acts{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+          .note{font-size:13px;color:var(--silver);line-height:1.8}
+          .banner{display:flex;gap:14px;align-items:flex-start;padding:14px 18px;border:1px solid var(--warn);background:var(--warn-bg);font-size:13px}
+          .banner i{color:var(--warn);margin-top:3px}
+          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-top:auto}
+          @media (max-width:767px){.page{padding:16px 20px 40px}.top,.mock{padding-left:20px;padding-right:20px}}
+        </style>
+      </helmet>
+      <div data-screen-label="Account" style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column">
+        <div class="mock">
+          <span class="tag">MOCK STATE</span>
+          <sc-for list="{{ tabs }}" as="t"><button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
+        </div>
+        <header class="top">
+          <div class="wm">Browser <b>Live</b></div>
+          <nav class="nav"><a href="Studio.dc.html">Studio</a><a class="on" href="#">Account</a></nav>
+        </header>
+        <main class="page">
+          <div><span class="h1">Account</span><span class="sub">YouTube の接続と、アカウントの管理</span></div>
+          <sc-if value="{{ isBusy }}">
+            <div class="banner"><i class="fa-solid fa-triangle-exclamation"></i><div>配信中のため、接続の解除・アカウントの削除・再接続はできません。先に配信を停止してください。</div></div>
+          </sc-if>
+          <div class="card">
+            <div class="eb">YouTube</div>
+            <div class="kv"><span>接続の状態</span><span class="{{ chipCls }}"><i class="{{ chipIcon }}"></i>{{ chipText }}</span></div>
+            <p class="note">{{ guide }}</p>
+            <div class="acts">
+              <sc-if value="{{ showRecheck }}"><button class="btn"><i class="fa-solid fa-rotate"></i>再確認</button><span class="note" style="font-size:12px">再確認は 1 分に 1 回、1 日 20 回までです。</span></sc-if>
+              <sc-if value="{{ showConnect }}"><button class="{{ connectCls }}"><i class="fa-brands fa-youtube"></i>{{ connectText }}</button></sc-if>
+              <sc-if value="{{ showDisconnect }}"><button class="{{ opCls }}">接続を解除</button></sc-if>
+            </div>
+          </div>
+          <div class="card danger">
+            <div class="eb" style="color:var(--live)">Danger Zone</div>
+            <p class="note">アカウントを削除すると、YouTube の接続を解除し、このアカウントに紐づく全ての記録を削除します。削除は要求の受理と同時に実行します。同じ Google アカウントでの再登録は、次の利用日から可能です。</p>
+            <div class="acts"><button class="{{ delCls }}"><i class="fa-solid fa-trash-can"></i>アカウントを削除</button></div>
+          </div>
+          <div class="acts"><button class="btn"><i class="fa-solid fa-right-from-bracket"></i>ログアウト</button></div>
+        </main>
+        <footer class="foot"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a></footer>
+      </div>
+    </x-dc>
+    <script type="text/x-dc" data-dc-script data-props='{
+  "$preview": { "width": 1440, "height": 900 }
+}'>
+      class Component extends DCLogic {
+        renderVals() {
+          const s = (this.state && this.state.s) || 'ok';
+          const go = (k) => () => this.setState({ s: k });
+          const defs = [['ok','接続済み'],['none','未接続'],['nolive','ライブ未有効'],['revoked','認可失効'],['busy','配信中']];
+          const tabs = defs.map(([k, l]) => ({ label: l, cls: s === k ? 'tab on' : 'tab', go: go(k) }));
+          const map = {
+            ok: { cls: 'chip ok', icon: 'fa-solid fa-check', text: '接続済み', guide: 'チャンネルがあり、ライブ配信が有効です。配信を開始できます。' },
+            none: { cls: 'chip', icon: 'fa-regular fa-circle', text: '未接続', guide: 'YouTube を接続すると、配信できます。チャンネルがない場合は、YouTube でチャンネルを作成してください。' },
+            nolive: { cls: 'chip warn', icon: 'fa-solid fa-triangle-exclamation', text: 'ライブ未有効', guide: 'YouTube 側でライブ配信を有効にしてください。有効になるまでに時間がかかる場合があります。有効にしたら「再確認」を押してください。' },
+            revoked: { cls: 'chip bad', icon: 'fa-solid fa-circle-xmark', text: '認可失効', guide: 'YouTube への許可が取り消されたか、失効しています。もう一度接続してください。' },
+            busy: { cls: 'chip ok', icon: 'fa-solid fa-check', text: '接続済み', guide: 'チャンネルがあり、ライブ配信が有効です。' }
+          }[s];
+          const busy = s === 'busy';
+          const off = busy ? 'btn dis' : 'btn';
+          return {
+            tabs, isBusy: busy,
+            chipCls: map.cls, chipIcon: map.icon, chipText: map.text, guide: map.guide,
+            showRecheck: s === 'ok' || s === 'nolive' || s === 'busy',
+            showConnect: s === 'none' || s === 'revoked' || s === 'nolive' || s === 'ok' || s === 'busy',
+            connectText: s === 'none' ? 'YouTube を接続' : '再接続',
+            connectCls: s === 'none' || s === 'revoked' ? 'btn pri' : off,
+            showDisconnect: s !== 'none',
+            opCls: off,
+            delCls: busy ? 'btn dis' : 'btn stop'
+          };
+        }
+      }
+    </script>
+  </body>
+</html>

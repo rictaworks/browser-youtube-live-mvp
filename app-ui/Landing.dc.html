@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet data-dc-atomics>
+        <link rel="stylesheet" href="styles.css">
+        <style>
+          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.6}
+          a{color:var(--silver);text-decoration:none}
+          a:hover{color:var(--teal)}
+          i{font-style:normal}
+          .top{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:20px 40px;background:var(--gradient-nav)}
+          .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
+          .wm b{color:var(--teal);font-weight:600}
+          .nav{display:flex;gap:28px;align-items:center}
+          .nav a{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
+          .hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;overflow:hidden;text-align:center;padding:120px 40px 100px}
+          .hbg{position:absolute;inset:0;background:url(assets/images/hero.webp) center/cover;filter:var(--filter-hero-img)}
+          .hov{position:absolute;inset:0;background:var(--gradient-hero-overlay)}
+          .hin{position:relative;max-width:var(--container-hero);display:flex;flex-direction:column;align-items:center;gap:28px}
+          .hh{font:700 var(--fs-hero)/var(--lh-hero) var(--font-display);text-shadow:var(--text-glow-hero)}
+          .hh em{color:var(--teal);font-style:italic;text-shadow:var(--text-glow-hero-em)}
+          .hs{font-size:var(--fs-hero-sub);line-height:var(--lh-sub);color:var(--silver);font-weight:300;max-width:620px}
+          .cta{display:inline-flex;align-items:center;gap:12px;font:600 12px/1 var(--font-sans);letter-spacing:.2em;padding:18px 40px;border:1px solid var(--teal);background:var(--teal-05);color:var(--teal);cursor:pointer;transition:var(--dur-fast)}
+          .cta:hover{background:var(--teal-dim);box-shadow:var(--glow-cta);color:var(--teal)}
+          .cta:focus-visible{outline:2px solid var(--white);outline-offset:4px}
+          .fine{font-size:12px;color:var(--silver-70);max-width:520px;line-height:1.8}
+          .sec{position:relative;padding:110px 40px 100px}
+          .sec.alt{background:var(--gradient-section-down)}
+          .sl{position:absolute;top:36px;left:40px;font-size:11px;letter-spacing:.2em;color:var(--section-label);text-transform:uppercase}
+          .sl b{color:var(--teal);font-weight:600;margin-right:10px;text-shadow:var(--text-glow-step)}
+          .in{max-width:var(--container-max);margin:0 auto}
+          .st{font:700 var(--fs-section-title)/var(--lh-title) var(--font-display);text-align:center}
+          .st::after{content:"";display:block;width:60px;height:2px;margin:20px auto 0;background:var(--teal);box-shadow:var(--glow-line)}
+          .lead{text-align:center;color:var(--silver);font-weight:300;line-height:var(--lh-body);margin:28px auto 0;max-width:620px}
+          .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px;margin-top:56px}
+          .vc{background:var(--card-bg);border:1px solid var(--border);padding:36px 28px;backdrop-filter:var(--blur-card);display:flex;flex-direction:column;gap:14px;transition:var(--dur-card)}
+          .vc:hover{border-color:var(--teal);transform:translateY(-6px);box-shadow:var(--glow-card)}
+          .vc i{font-size:26px;color:var(--teal);text-shadow:var(--text-glow-icon)}
+          .vc h3{font:600 18px var(--font-sans);color:var(--white)}
+          .vc p{font-size:13px;line-height:var(--lh-body);color:var(--silver);font-weight:300}
+          .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:40px;margin-top:56px;text-align:center}
+          .sn{font:700 var(--fs-stat-big)/1 var(--font-display);color:var(--teal);text-shadow:var(--text-glow-stat)}
+          .sn small{font:400 14px var(--font-sans);color:var(--silver);margin-left:6px;text-shadow:none}
+          .sk{margin-top:12px;font-size:12px;letter-spacing:.12em;color:var(--silver);line-height:1.7}
+          .two{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:24px;margin-top:56px}
+          .box{border:1px solid var(--border);background:var(--card-bg);padding:28px 32px}
+          .box h3{font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:var(--section-label);font-weight:500;margin-bottom:16px}
+          .row{display:flex;justify-content:space-between;gap:16px;padding:11px 0;border-bottom:1px solid var(--silver-08);font-size:14px}
+          .row span:first-child{color:var(--silver)}
+          .row b{font-weight:500;color:var(--white);text-align:right}
+          .ul{list-style:none;display:flex;flex-direction:column;gap:12px;font-size:14px;color:var(--silver);line-height:1.8}
+          .ul li{display:flex;gap:12px}
+          .ul li i{color:var(--teal);font-size:10px;margin-top:8px;flex:none}
+          .final{text-align:center;display:flex;flex-direction:column;align-items:center;gap:28px}
+          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+          @media (max-width:767px){.top{padding:16px 20px}.sec{padding:100px 20px 80px}.sl{left:20px}.hero{padding:110px 20px 80px}}
+        </style>
+      </helmet>
+      <div data-screen-label="Landing" style="min-height:100vh;background:var(--bg)">
+        <header class="top">
+          <div class="wm">Browser <b>Live</b></div>
+          <nav class="nav"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a><a href="Studio.dc.html" style="color:var(--teal)">Log in</a></nav>
+        </header>
+        <section class="hero">
+          <div class="hbg"></div><div class="hov"></div>
+          <div class="hin">
+            <h1 class="hh">Go Live,<br><em>From a Tab.</em></h1>
+            <p class="hs">配信ソフトをインストールせず、ブラウザのタブを開くだけで、カメラ・マイク・画面共有を合成した映像を、あなたの YouTube チャンネルへライブ配信します。</p>
+            <a class="cta" href="Studio.dc.html">LOG IN WITH GOOGLE <i class="fa-solid fa-angles-right"></i></a>
+            <p class="fine">ログインで要求するのは識別のみです。メールアドレスとプロフィールは要求しません。YouTube の権限は、「YouTube を接続」を操作したときに、はじめて要求します。</p>
+          </div>
+        </section>
+        <section class="sec alt">
+          <div class="sl"><b>01</b>VALUE</div>
+          <div class="in">
+            <h2 class="st">Why a Tab</h2>
+            <div class="grid">
+              <div class="vc"><i class="fa-solid fa-cloud"></i><h3>No Install</h3><p>対応ブラウザでページを開けば、配信できます。</p></div>
+              <div class="vc"><i class="fa-solid fa-key"></i><h3>No Stream Key</h3><p>配信枠・配信キー・紐づけは、システムが自動で用意します。配信キーを見ることも、貼ることもありません。</p></div>
+              <div class="vc"><i class="fa-solid fa-window-maximize"></i><h3>One Screen</h3><p>ソースの準備・プレビュー・開始・健全性の確認・停止を、1 画面で行います。</p></div>
+              <div class="vc"><i class="fa-solid fa-power-off"></i><h3>Auto Close</h3><p>タブを閉じた場合や回線が切れた場合も、配信が YouTube 上に残り続けません。</p></div>
+            </div>
+          </div>
+        </section>
+        <section class="sec">
+          <div class="sl"><b>02</b>LIMITS</div>
+          <div class="in">
+            <h2 class="st">Fair Use</h2>
+            <p class="lead">無料枠の資源を、多くの人が使えるようにするための制限です。</p>
+            <div class="stats">
+              <div><div class="sn">1<small>回 / 日</small></div><div class="sk">配信できる回数<br>（JST 03:00 区切り）</div></div>
+              <div><div class="sn">60<small>分</small></div><div class="sk">1 配信の長さ</div></div>
+              <div><div class="sn">3<small>本</small></div><div class="sk">全体の同時配信数</div></div>
+              <div><div class="sn">1,200<small>kbps</small></div><div class="sk">必要な上り回線<br>（実効スループット）</div></div>
+            </div>
+          </div>
+        </section>
+        <section class="sec alt">
+          <div class="sl"><b>03</b>ENVIRONMENT</div>
+          <div class="in">
+            <h2 class="st">Requirements</h2>
+            <div class="two">
+              <div class="box">
+                <h3>Supported</h3>
+                <div class="row"><span>保証する環境</span><b>デスクトップの Chrome・Edge（最新版）</b></div>
+                <div class="row"><span>その他のブラウザ</span><b>能力検出を通れば利用可（保証なし）</b></div>
+                <div class="row" style="border-bottom:0"><span>モバイル</span><b>保証しない</b></div>
+              </div>
+              <div class="box">
+                <h3>Before You Start</h3>
+                <ul class="ul">
+                  <li><i class="fa-solid fa-square"></i>YouTube チャンネルを持ち、ライブ配信が有効になっていること。有効化には時間がかかる場合があります。</li>
+                  <li><i class="fa-solid fa-square"></i>YouTube の利用条件（配信者の年齢要件を含む）を満たしていること。</li>
+                  <li><i class="fa-solid fa-square"></i>上り回線の実効スループットが 1,200 kbps 以上あること。</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section class="sec">
+          <div class="in final">
+            <h2 class="st">Ready When <span style="color:var(--teal);font-style:italic;text-shadow:var(--text-glow-hero-em)">You Are.</span></h2>
+            <a class="cta" href="Studio.dc.html">LOG IN WITH GOOGLE <i class="fa-solid fa-angles-right"></i></a>
+          </div>
+        </section>
+        <footer class="foot"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a></footer>
+      </div>
+    </x-dc>
+    <script type="text/x-dc" data-dc-script data-props='{
+  "$preview": { "width": 1440, "height": 900 }
+}'>
+      class Component extends DCLogic {
+        renderVals() { return {}; }
+      }
+    </script>
+  </body>
+</html>
