@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet data-dc-atomics>
+        <link rel="stylesheet" href="styles.css">
+        <style>
+          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.5}
+          a{color:var(--silver);text-decoration:none}
+          a:hover{color:var(--teal)}
+          a:focus-visible{outline:2px solid var(--white);outline-offset:3px}
+          i{font-style:normal}
+          .mock{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 40px;background:var(--bg-footer);border-bottom:1px dashed var(--silver-30);font-size:12px;color:var(--silver-70)}
+          .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;margin-right:6px}
+          .top{display:flex;align-items:center;justify-content:space-between;padding:18px 40px}
+          .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
+          .wm b{color:var(--teal);font-weight:600}
+          .nav{display:flex;gap:28px;align-items:center}
+          .nav a{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
+          .nav a.on{color:var(--teal);text-shadow:var(--text-glow-step)}
+          .page{width:100%;max-width:860px;margin:0 auto;padding:16px 40px 60px;display:flex;flex-direction:column;gap:20px}
+          .h1{font:700 40px/1.1 var(--font-display)}
+          .sub{color:var(--silver-70);font-size:13px;margin-left:16px}
+          .eb{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
+          .eb::after{content:"";flex:1;height:1px;background:var(--silver-10)}
+          .card{border:1px solid var(--border);background:var(--card-bg);padding:22px 26px;display:flex;flex-direction:column;gap:12px}
+          .row{display:flex;justify-content:space-between;gap:24px;padding:10px 0;border-bottom:1px solid var(--silver-08);font-size:14px}
+          .row:last-child{border-bottom:0}
+          .row span:first-child{color:var(--silver-70);flex:none;max-width:40%}
+          .row b{font-weight:500;color:var(--white);text-align:right}
+          .note{font-size:14px;color:var(--silver);line-height:1.9}
+          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:12px;letter-spacing:.2em;text-transform:uppercase;margin-top:auto}
+          @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+          @media (max-width:767px){.page{padding:16px 20px 40px}.top,.mock{padding-left:20px;padding-right:20px}.row{flex-direction:column;gap:4px}.row span:first-child{max-width:none}.row b{text-align:left}}
+        </style>
+      </helmet>
+      <div data-screen-label="Terms" style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column">
+        <div class="mock"><span class="tag">MOCK</span>本文は、requirements.md の記載を並べた仮置きです。公開用の文章は Gemini が執筆します。</div>
+        <header class="top">
+          <a class="wm" href="Landing.dc.html">Browser <b>Live</b></a>
+          <nav class="nav"><a class="on" href="Terms.dc.html">利用規約</a><a href="Privacy.dc.html">プライバシーポリシー</a></nav>
+        </header>
+        <main class="page">
+          <div><span class="h1">Terms</span><span class="sub">利用規約</span></div>
+          <div class="card">
+            <div class="eb">Service</div>
+            <p class="note">本サービスは、配信ソフトをインストールせず、ブラウザのタブを開くだけで、カメラ・マイク・画面共有を合成した映像を、利用者自身の YouTube チャンネルへライブ配信するサービスです。</p>
+          </div>
+          <div class="card">
+            <div class="eb">Eligibility</div>
+            <div class="row"><span>YouTube</span><b>YouTube チャンネルを持ち、ライブ配信が有効になっていること</b></div>
+            <div class="row"><span>年齢</span><b>YouTube の利用条件（配信者の年齢要件を含む）を満たしていること。配信者は 16 歳以上です</b></div>
+            <div class="row"><span>回線</span><b>上り回線の実効スループットが 1,200 kbps 以上であること</b></div>
+          </div>
+          <div class="card">
+            <div class="eb">Limits</div>
+            <div class="row"><span>配信の回数</span><b>アカウントごとに 1 日 1 回（JST 03:00 区切り）。YouTube でライブが確定した時点で消費します</b></div>
+            <div class="row"><span>配信の長さ</span><b>1 配信 60 分まで</b></div>
+            <div class="row"><span>同時配信</span><b>全体で 3 本まで</b></div>
+            <div class="row"><span>受付の頻度</span><b>アカウントごとに 1 時間に 10 回まで</b></div>
+            <div class="row"><span>月あたりの配信量</span><b>送信転送量の予算に達した月は、新規の受付を行いません</b></div>
+            <div class="row"><span>1 日の開始数</span><b>YouTube API の割り当てにより、全体で上限があります</b></div>
+            <p class="note" style="font-size:12px;color:var(--silver-70)">制限値は変更することがあります。</p>
+          </div>
+          <div class="card">
+            <div class="eb">YouTube Terms</div>
+            <p class="note">本サービスを利用することで、利用者は YouTube 利用規約に同意したものとします。</p>
+            <p class="note"><a href="https://www.youtube.com/t/terms" target="_blank" rel="noopener noreferrer" style="color:var(--teal)">YouTube 利用規約 <i class="fa-solid fa-arrow-up-right-from-square"></i></a></p>
+          </div>
+          <div class="card">
+            <div class="eb">Provision</div>
+            <div class="row"><span>料金</span><b>無料です。課金・収益化に関する機能はありません</b></div>
+            <div class="row"><span>稼働</span><b>無料枠の資源が尽きた場合は、サービスを停止します</b></div>
+            <div class="row"><span>保守・監視</span><b>リリース後の不具合対応・機能改修の体制を持たず、稼働の監視を行いません</b></div>
+          </div>
+          <div class="card">
+            <div class="eb">Contact</div>
+            <div class="row"><span>運営</span><b>Ricta Works</b></div>
+            <div class="row"><span>連絡先</span><b>info@rictaworks.jp</b></div>
+            <div class="row"><span>施行日</span><b>未定</b></div>
+          </div>
+        </main>
+        <footer class="foot"><a href="Terms.dc.html">利用規約</a><a href="Privacy.dc.html">プライバシーポリシー</a></footer>
+      </div>
+    </x-dc>
+    <script type="text/x-dc" data-dc-script data-props='{
+  "$preview": { "width": 1440, "height": 900 }
+}'>
+      class Component extends DCLogic {
+        renderVals() { return {}; }
+      }
+    </script>
+  </body>
+</html>

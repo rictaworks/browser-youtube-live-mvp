@@ -10,10 +10,21 @@
       <helmet data-dc-atomics>
         <link rel="stylesheet" href="styles.css">
         <style>
+          :root{--live:oklch(0.72 0.2 22);--live-bg:oklch(0.72 0.2 22 / 0.12);--warn:oklch(0.84 0.15 85);--warn-bg:oklch(0.84 0.15 85 / 0.1)}
           body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.6}
           a{color:var(--silver);text-decoration:none}
           a:hover{color:var(--teal)}
+          a:focus-visible{outline:2px solid var(--white);outline-offset:3px}
           i{font-style:normal}
+          .mock{position:fixed;left:0;right:0;bottom:0;z-index:70;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 40px;background:var(--bg-footer);border-top:1px dashed var(--silver-30)}
+          .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;color:var(--silver-70);margin-right:6px}
+          .tab{font:500 11px/1 var(--font-sans);padding:7px 10px;color:var(--silver);background:transparent;border:1px solid var(--silver-30);cursor:pointer;letter-spacing:.05em}
+          .tab.on{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
+          .banner{display:flex;gap:14px;align-items:flex-start;text-align:left;padding:14px 18px;border:1px solid var(--warn);background:var(--warn-bg);font-size:13px;color:var(--white);max-width:520px}
+          .banner i{color:var(--warn);margin-top:3px}
+          .banner.info{border-color:var(--teal-50);background:var(--teal-05)}
+          .banner.info i{color:var(--teal)}
+          @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
           .top{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:center;padding:20px 40px;background:var(--gradient-nav)}
           .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
           .wm b{color:var(--teal);font-weight:600}
@@ -65,7 +76,7 @@
       <div data-screen-label="Landing" style="min-height:100vh;background:var(--bg)">
         <header class="top">
           <div class="wm">Browser <b>Live</b></div>
-          <nav class="nav"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a><a href="Studio.dc.html" style="color:var(--teal)">Log in</a></nav>
+          <nav class="nav"><a href="Terms.dc.html">利用規約</a><a href="Privacy.dc.html">プライバシーポリシー</a><a href="Studio.dc.html" style="color:var(--teal)">Log in</a></nav>
         </header>
         <section class="hero">
           <div class="hbg"></div><div class="hov"></div>
@@ -73,6 +84,9 @@
             <h1 class="hh">Go Live,<br><em>From a Tab.</em></h1>
             <p class="hs">配信ソフトをインストールせず、ブラウザのタブを開くだけで、カメラ・マイク・画面共有を合成した映像を、あなたの YouTube チャンネルへライブ配信します。</p>
             <a class="cta" href="Studio.dc.html">LOG IN WITH GOOGLE <i class="fa-solid fa-angles-right"></i></a>
+            <sc-if value="{{ showNotice }}">
+              <div class="{{ noticeCls }}"><i class="{{ noticeIcon }}"></i><div><b>{{ noticeTitle }}</b> {{ noticeBody }}</div></div>
+            </sc-if>
             <p class="fine">ログインで要求するのは識別のみです。メールアドレスとプロフィールは要求しません。YouTube の権限は、「YouTube を接続」を操作したときに、はじめて要求します。</p>
           </div>
         </section>
@@ -98,6 +112,14 @@
               <div><div class="sn">60<small>分</small></div><div class="sk">1 配信の長さ</div></div>
               <div><div class="sn">3<small>本</small></div><div class="sk">全体の同時配信数</div></div>
               <div><div class="sn">1,200<small>kbps</small></div><div class="sk">必要な上り回線<br>（実効スループット）</div></div>
+            </div>
+            <div class="box" style="margin-top:56px">
+              <h3>Other Limits</h3>
+              <div class="row"><span>1 日の開始数</span><b>YouTube API の割り当てにより、全体で上限があります</b></div>
+              <div class="row"><span>月あたりの配信量</span><b>送信転送量の予算に達した月は、新規の受付を行いません</b></div>
+              <div class="row"><span>画質</span><b>配信中は解像度を変えません。回線が下限を下回った場合は、劣化を表示して継続し、映像が届かない状態が続くと終了します</b></div>
+              <div class="row"><span>中断の許容</span><b>30 秒を超える中断から、同じ配信へは復帰できません。復帰は 1 配信につき 10 回までです</b></div>
+              <div class="row" style="border-bottom:0"><span>アカウント削除後</span><b>同じ Google アカウントでの再登録は、次の利用日から可能です</b></div>
             </div>
           </div>
         </section>
@@ -129,14 +151,34 @@
             <a class="cta" href="Studio.dc.html">LOG IN WITH GOOGLE <i class="fa-solid fa-angles-right"></i></a>
           </div>
         </section>
-        <footer class="foot"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a></footer>
+        <footer class="foot"><a href="Terms.dc.html">利用規約</a><a href="Privacy.dc.html">プライバシーポリシー</a></footer>
+        <div class="mock">
+          <span class="tag">MOCK STATE</span>
+          <sc-for list="{{ tabs }}" as="t"><button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
+        </div>
       </div>
     </x-dc>
     <script type="text/x-dc" data-dc-script data-props='{
   "$preview": { "width": 1440, "height": 900 }
 }'>
       class Component extends DCLogic {
-        renderVals() { return {}; }
+        renderVals() {
+          const s = (this.state && this.state.s) || 'none';
+          const go = (k) => () => this.setState({ s: k });
+          const defs = [['none','ログインの案内なし'],['hold','再登録の保留'],['bot','bot 判定'],['rate','頻度超過']];
+          const tabs = defs.map(([k, l]) => ({ label: l, cls: s === k ? 'tab on' : 'tab', go: go(k) }));
+          const notices = {
+            hold: ['banner info', 'fa-solid fa-circle-info', 'このアカウントは、削除から間もないため、まだ登録できません。', '次の利用日（JST 03:00）から利用できます。'],
+            bot: ['banner', 'fa-solid fa-triangle-exclamation', '確認に失敗しました。', '時間を置いて、もう一度お試しください。'],
+            rate: ['banner', 'fa-solid fa-triangle-exclamation', 'ログインの試行が多すぎます。', '時間を置いて、もう一度お試しください。']
+          };
+          const n = notices[s] || null;
+          return {
+            tabs,
+            showNotice: !!n,
+            noticeCls: n ? n[0] : 'banner', noticeIcon: n ? n[1] : '', noticeTitle: n ? n[2] : '', noticeBody: n ? n[3] : ''
+          };
+        }
       }
     </script>
   </body>

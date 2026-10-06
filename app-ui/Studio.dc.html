@@ -11,75 +11,98 @@
         <link rel="stylesheet" href="styles.css">
         <style>
           :root{--live:oklch(0.72 0.2 22);--live-bg:oklch(0.72 0.2 22 / 0.12);--warn:oklch(0.84 0.15 85);--warn-bg:oklch(0.84 0.15 85 / 0.1)}
-          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.6}
+          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.5}
           a{color:var(--silver);text-decoration:none}
           a:hover{color:var(--teal)}
+          a:focus-visible{outline:2px solid var(--white);outline-offset:3px}
           i{font-style:normal}
           i[class=""]{display:none}
-          .mock{position:sticky;top:0;z-index:70;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 40px;background:var(--bg-footer);border-bottom:1px dashed var(--silver-30)}
-          .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;color:var(--silver-70);margin-right:6px}
+          .off{display:none!important}
+          .mock{position:sticky;top:0;z-index:70;display:flex;flex-direction:column;gap:6px;padding:8px 40px;background:var(--bg-footer);border-bottom:1px dashed var(--silver-30)}
+          .mrow{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+          .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;color:var(--silver-70);margin-right:6px;width:64px}
           .mock .sp{flex:1}
           .tab{font:500 11px/1 var(--font-sans);padding:7px 10px;color:var(--silver);background:transparent;border:1px solid var(--silver-30);cursor:pointer;letter-spacing:.05em}
           .tab.on{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
           .tab.lk{border-style:dashed}
-          .top{display:flex;align-items:center;justify-content:space-between;padding:18px 40px}
+          .top{display:flex;align-items:center;justify-content:space-between;padding:18px 40px;gap:16px}
           .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
           .wm b{color:var(--teal);font-weight:600}
-          .nav{display:flex;gap:28px;align-items:center}
-          .nav a{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
+          .nav{display:flex;gap:28px;align-items:center;flex-wrap:wrap}
+          .nav a{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
           .nav a.on{color:var(--teal);text-shadow:var(--text-glow-step)}
-          .pill{display:inline-flex;gap:8px;align-items:center;font-size:12px;letter-spacing:.05em;padding:6px 12px;border:1px solid var(--silver-30);color:var(--silver)}
-          .studio{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;padding:8px 40px 40px;max-width:1360px;margin:0 auto}
+          .pill{display:inline-flex;gap:8px;align-items:center;font-size:12px;letter-spacing:.05em;padding:6px 12px;border:1px solid var(--silver-60);color:var(--silver);font-variant-numeric:tabular-nums}
+          .pill.live{border-color:var(--live);color:var(--white)}
+          .pill.live i{color:var(--live)}
+          .pill.warn{border-color:var(--warn);color:var(--white)}
+          .pill.warn i{color:var(--warn)}
+          .studio{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:24px;padding:8px 40px 40px;max-width:1360px;margin:0 auto;align-items:start}
           .stack{display:flex;flex-direction:column;gap:16px;min-width:0}
-          .head{display:flex;align-items:baseline;gap:16px;padding:8px 0 4px}
+          .head{display:flex;align-items:baseline;gap:16px;padding:8px 0 4px;flex-wrap:wrap}
           .h1{font:700 40px/1.1 var(--font-display);color:var(--white)}
           .h1 em{color:var(--teal);font-style:italic;text-shadow:var(--text-glow-hero-em)}
           .sub{color:var(--silver-70);font-size:13px}
-          .eb{font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
+          .eb{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
           .eb::after{content:"";flex:1;height:1px;background:var(--silver-10)}
           .card{border:1px solid var(--border);background:var(--card-bg);padding:18px 22px;display:flex;flex-direction:column;gap:14px}
           .pv{position:relative;aspect-ratio:16/9;border:1px solid var(--border);background:var(--bg2);overflow:hidden}
-          .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(135deg,var(--teal-04) 0 12px,transparent 12px 24px);font:11px ui-monospace,Menlo,monospace;color:var(--silver-70);letter-spacing:.1em;text-align:center;line-height:1.7}
-          .ph.wipe{inset:auto 18px 18px auto;width:22%;aspect-ratio:16/9;border:1px solid var(--silver-30);background-color:var(--navy-95)}
-          .badge{position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--navy-95);border:1px solid var(--silver-40);font:600 12px var(--font-sans);letter-spacing:.1em;z-index:2;font-variant-numeric:tabular-nums}
+          .ph{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:repeating-linear-gradient(135deg,var(--teal-04) 0 12px,transparent 12px 24px);font:12px ui-monospace,Menlo,monospace;color:var(--silver-70);letter-spacing:.1em;text-align:center;line-height:1.7}
+          .ph.wipe{inset:auto 2.5% 2.5% auto;width:22%;aspect-ratio:16/9;border:1px solid var(--silver-40);background-color:var(--navy-95);border-radius:6%/10.7%}
+          .badge{position:absolute;left:14px;top:14px;display:flex;align-items:center;gap:10px;padding:6px 14px;background:var(--navy-95);border:1px solid var(--silver-60);font:600 16px var(--font-sans);letter-spacing:.08em;z-index:2;font-variant-numeric:tabular-nums}
+          .badge span:empty{display:none}
           .badge.live{border-color:var(--live)}
           .badge.live i{color:var(--live)}
           .badge.warn{border-color:var(--warn)}
           .badge.warn i{color:var(--warn)}
+          .badge.go{border-color:var(--teal-50)}
           .badge.go i{color:var(--teal)}
-          .ctl{display:flex;align-items:center;gap:20px;flex-wrap:wrap;padding:16px 22px;border:1px solid var(--border);background:var(--card-bg)}
+          .ctl{position:sticky;bottom:12px;z-index:30;display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding:14px 22px;border:1px solid var(--border);background:var(--bg2)}
           .grow{flex:1;min-width:200px}
-          .btn{font:600 12px/1 var(--font-sans);letter-spacing:.2em;padding:15px 28px;border:1px solid var(--silver-30);background:transparent;color:var(--silver);cursor:pointer;transition:var(--dur-fast);display:inline-flex;align-items:center;gap:10px}
+          .btn{font:600 12px/1 var(--font-sans);letter-spacing:.18em;padding:15px 26px;border:1px solid var(--silver-60);background:transparent;color:var(--silver);cursor:pointer;transition:var(--dur-fast);display:inline-flex;align-items:center;gap:10px}
           .btn:hover{color:var(--teal);border-color:var(--teal)}
           .btn:focus-visible{outline:2px solid var(--white);outline-offset:3px}
           .btn.pri{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
           .btn.pri:hover{background:var(--teal-dim);box-shadow:var(--glow-cta)}
           .btn.stop{color:var(--white);border-color:var(--live);background:var(--live-bg)}
           .btn.stop:hover{box-shadow:0 0 24px oklch(0.72 0.2 22 / 0.3)}
-          .btn.dis{color:var(--silver-70);border-color:var(--silver-20);cursor:not-allowed}
-          .btn.dis:hover{color:var(--silver-70);border-color:var(--silver-20);box-shadow:none}
-          .btn.sm{padding:9px 14px;font-size:11px;letter-spacing:.12em}
-          .why{display:flex;gap:8px;align-items:flex-start;font-size:13px;color:var(--silver)}
-          .why i{color:var(--warn);margin-top:3px}
-          .url{display:flex;align-items:center;gap:12px;flex:1;min-width:240px;padding:10px 14px;border:1px solid var(--silver-20);background:var(--bg);font-size:13px;color:var(--white);font-variant-numeric:tabular-nums}
+          .btn.dis{color:var(--silver-70);border-color:var(--silver-40);cursor:not-allowed}
+          .btn.dis:hover{color:var(--silver-70);border-color:var(--silver-40);box-shadow:none;background:transparent}
+          .btn.sm{padding:9px 14px;font-size:12px;letter-spacing:.1em}
+          .btn.none{display:none}
+          .note{font-size:12px;color:var(--silver-70);line-height:1.5}
+          .ctlt{font-size:13px;color:var(--silver)}
+          .url{display:flex;align-items:center;gap:12px;flex:1;min-width:240px;padding:8px 12px;border:1px solid var(--silver-60);background:var(--bg);font-size:13px;color:var(--white);font-variant-numeric:tabular-nums}
           .url span{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-          .srcs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
-          .src{border:1px solid var(--border);background:var(--card-bg);padding:14px 16px;display:flex;flex-direction:column;gap:10px}
-          .src .n{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--white)}
-          .src .n i{color:var(--teal);text-shadow:var(--text-glow-icon);width:18px;text-align:center}
-          .dev{font-size:12px;color:var(--silver);padding:8px 10px;border:1px solid var(--silver-20);background:var(--bg);display:flex;justify-content:space-between;gap:8px}
-          .chip{display:inline-flex;gap:6px;align-items:center;align-self:flex-start;font-size:11px;letter-spacing:.08em;padding:3px 9px;border:1px solid var(--silver-30);color:var(--silver)}
+          .banner{display:flex;gap:14px;align-items:flex-start;padding:14px 18px;border:1px solid var(--warn);background:var(--warn-bg);font-size:13px;color:var(--white)}
+          .banner i{color:var(--warn);margin-top:3px}
+          .banner.info{border-color:var(--teal-50);background:var(--teal-05)}
+          .banner.info i{color:var(--teal)}
+          .banner.bad{border-color:var(--live);background:var(--live-bg)}
+          .banner.bad i{color:var(--live)}
+          .chip{display:inline-flex;gap:6px;align-items:center;font-size:12px;letter-spacing:.06em;padding:3px 9px;border:1px solid var(--silver-60);color:var(--silver);white-space:nowrap}
           .chip.ok{border-color:var(--teal-50);color:var(--teal)}
           .chip.warn{border-color:var(--warn);color:var(--warn)}
+          .chip.bad{border-color:var(--live);color:var(--white)}
+          .chip.bad i{color:var(--live)}
+          .srow{display:flex;flex-direction:column;gap:8px;padding:12px 0;border-bottom:1px solid var(--silver-08)}
+          .srow:first-of-type{padding-top:0}
+          .srow:last-of-type{border-bottom:0;padding-bottom:0}
+          .srow .n{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--white)}
+          .srow .n i{color:var(--teal);text-shadow:var(--text-glow-icon);width:18px;text-align:center}
+          .srow .n .chip{margin-left:auto}
+          .srow .n .chip i{text-shadow:none;width:auto}
+          .srow .ln{display:flex;gap:8px;align-items:center}
+          .dev{flex:1;min-width:0;font-size:12px;color:var(--silver);padding:7px 10px;border:1px solid var(--silver-60);background:var(--bg);display:flex;justify-content:space-between;gap:8px;white-space:nowrap}
+          .dev span{overflow:hidden;text-overflow:ellipsis}
           .hg{display:grid;grid-template-columns:1fr 1fr;gap:16px 14px}
-          .m .l{font-size:10px;letter-spacing:.15em;text-transform:uppercase;color:var(--silver-70)}
+          .m .l{font-size:12px;letter-spacing:.06em;color:var(--silver-70);display:flex;gap:6px;align-items:center}
           .m .v{font:500 22px/1.2 var(--font-sans);color:var(--white);font-variant-numeric:tabular-nums}
-          .m .v small{font-size:11px;color:var(--silver-70);margin-left:4px;letter-spacing:.05em}
-          .m.warn .v{color:var(--warn)}
-          .m.warn .l{color:var(--warn)}
+          .m .v small{font-size:12px;color:var(--silver-70);margin-left:4px;letter-spacing:.05em}
+          .m.warn .v,.m.warn .l,.m.warn .l i{color:var(--warn)}
           .kv{display:flex;justify-content:space-between;gap:12px;font-size:13px;padding:6px 0;border-bottom:1px solid var(--silver-08)}
           .kv span:first-child{color:var(--silver-70)}
           .kv b{font-weight:500;color:var(--white);font-variant-numeric:tabular-nums;text-align:right}
+          .kv:last-child{border-bottom:0}
           .log{list-style:none;display:flex;flex-direction:column;gap:10px;font-size:13px}
           .log li{display:flex;gap:10px;align-items:flex-start;color:var(--silver)}
           .log time{font-variant-numeric:tabular-nums;color:var(--silver-70);flex:none;width:42px}
@@ -88,67 +111,74 @@
           .log i.w{color:var(--warn)}
           .log i.t{color:var(--teal)}
           .stages{list-style:none;display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;width:100%}
-          .stg{border-top:2px solid var(--silver-20);padding-top:10px;font-size:12px;color:var(--silver-70);line-height:1.6}
-          .stg b{display:block;font-size:10px;letter-spacing:.2em;font-weight:600;margin-bottom:4px;text-transform:uppercase}
+          .stg{border-top:2px solid var(--silver-30);padding-top:10px;font-size:12px;color:var(--silver-70);line-height:1.5}
+          .stg b{display:flex;gap:6px;align-items:center;font-size:12px;letter-spacing:.14em;font-weight:600;margin-bottom:4px}
           .stg.done{border-top-color:var(--teal-50);color:var(--silver)}
           .stg.done b{color:var(--teal)}
           .stg.now{border-top-color:var(--teal);color:var(--white)}
           .stg.now b{color:var(--teal);text-shadow:var(--text-glow-step)}
-          .banner{display:flex;gap:14px;align-items:flex-start;padding:14px 18px;border:1px solid var(--warn);background:var(--warn-bg);font-size:13px;color:var(--white)}
-          .banner i{color:var(--warn);margin-top:3px}
-          .banner.info{border-color:var(--teal-50);background:var(--teal-05)}
-          .banner.info i{color:var(--teal)}
           .end{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;width:100%}
+          .end .m .v{font-size:16px}
           .overlay{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;padding:20px;background:rgba(5,8,16,.84);backdrop-filter:blur(8px)}
           .dlg{width:min(560px,100%);border:1px solid var(--border);background:var(--bg2);box-shadow:var(--glow-card);padding:28px 32px;display:flex;flex-direction:column;gap:18px}
           .dlg h2{font:700 30px/1.15 var(--font-display)}
           .fld{display:flex;flex-direction:column;gap:8px}
-          .fld label{font-size:11px;letter-spacing:.15em;color:var(--silver-70);display:flex;justify-content:space-between}
-          .fld input{font:14px var(--font-sans);color:var(--white);background:var(--bg);border:1px solid var(--silver-30);padding:11px 14px}
-          .fld input:focus{outline:2px solid var(--white);outline-offset:2px;border-color:var(--teal)}
+          .fld label{font-size:12px;letter-spacing:.12em;color:var(--silver-70);display:flex;justify-content:space-between}
+          .fld input{font:14px var(--font-sans);color:var(--white);background:var(--bg);border:1px solid var(--silver-60);padding:11px 14px}
+          .fld input:focus-visible{outline:2px solid var(--white);outline-offset:2px;border-color:var(--teal)}
           .seg{display:flex}
-          .seg button{flex:1;font:500 13px var(--font-sans);padding:11px 8px;color:var(--silver);background:transparent;border:1px solid var(--silver-30);margin-left:-1px;cursor:pointer}
+          .seg button{flex:1;font:500 13px var(--font-sans);padding:11px 8px;color:var(--silver);background:transparent;border:1px solid var(--silver-60);margin-left:-1px;cursor:pointer}
+          .seg button:focus-visible{outline:2px solid var(--white);outline-offset:2px;position:relative}
           .seg button.on{color:var(--teal);border-color:var(--teal);background:var(--teal-05);position:relative}
-          .note{font-size:12px;color:var(--silver-70)}
-          .list{list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--silver);padding:12px 14px;border:1px solid var(--silver-10);background:var(--bg)}
+          .list{list-style:none;display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--silver);padding:12px 14px;border:1px solid var(--silver-20);background:var(--bg)}
           .list li{display:flex;gap:10px}
-          .list li i{color:var(--teal);margin-top:4px;font-size:10px}
+          .list li i{color:var(--teal);margin-top:6px;font-size:10px}
           .acts{display:flex;gap:12px;justify-content:flex-end;align-items:center;flex-wrap:wrap}
           .un{width:100%;max-width:760px;margin:40px auto;padding:0 40px;display:flex;flex-direction:column;gap:20px}
           .cap{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid var(--silver-08);font-size:14px}
-          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:11px;letter-spacing:.2em;text-transform:uppercase}
-          @media (max-width:1023px){.studio{grid-template-columns:minmax(0,1fr)}.srcs{grid-template-columns:1fr}.stages{grid-template-columns:repeat(2,minmax(0,1fr))}.end{grid-template-columns:repeat(2,minmax(0,1fr))}.top,.mock{padding-left:20px;padding-right:20px}.studio{padding-left:20px;padding-right:20px}}
+          .cap small{display:block;color:var(--silver-70);font-size:12px}
+          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:12px;letter-spacing:.2em;text-transform:uppercase;margin-top:auto}
+          @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+          @media (max-width:1023px){.studio{grid-template-columns:minmax(0,1fr)}.stages{grid-template-columns:repeat(2,minmax(0,1fr))}.end{grid-template-columns:repeat(2,minmax(0,1fr))}.top,.mock{padding-left:20px;padding-right:20px}.studio{padding-left:20px;padding-right:20px}}
         </style>
       </helmet>
       <div data-screen-label="Studio" style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column">
         <div class="mock">
-          <span class="tag">MOCK STATE</span>
-          <sc-for list="{{ tabs }}" as="t">
-            <button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button>
-          </sc-for>
-          <span class="sp"></span>
-          <a class="tab lk" href="Landing.dc.html">Landing</a>
-          <a class="tab lk" href="Account.dc.html">Account</a>
+          <div class="mrow">
+            <span class="tag">STATE</span>
+            <sc-for list="{{ tabs }}" as="t"><button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
+            <span class="sp"></span>
+            <a class="tab lk" href="Landing.dc.html">Landing</a>
+            <a class="tab lk" href="Account.dc.html">Account</a>
+          </div>
+          <div class="{{ varRowCls }}">
+            <span class="tag">VARIANT</span>
+            <sc-for list="{{ variants }}" as="t"><button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
+          </div>
+          <div class="{{ rejRowCls }}">
+            <span class="tag">REASON</span>
+            <sc-for list="{{ reasons }}" as="t"><button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
+          </div>
         </div>
         <header class="top">
-          <div class="wm">Browser <b>Live</b></div>
+          <a class="wm" href="Landing.dc.html">Browser <b>Live</b></a>
           <nav class="nav">
             <a class="on" href="#">Studio</a>
             <a href="Account.dc.html">Account</a>
-            <span class="pill"><i class="fa-regular fa-clock"></i>本日の利用枠 {{ usageText }}</span>
+            <span class="{{ hdrLiveCls }}"><i class="{{ hdrLiveIcon }}"></i>{{ hdrLiveText }}</span>
+            <span class="pill"><i class="fa-regular fa-clock"></i>本日の利用枠 {{ usageRemain }}</span>
           </nav>
         </header>
         <sc-if value="{{ isUnsupported }}">
           <div class="un">
             <div class="eb">Environment</div>
             <h1 class="h1">Not <em>Supported.</em></h1>
-            <p class="sub" style="font-size:14px;line-height:1.9">このブラウザでは配信を開始できません。配信に必要な能力が不足しています。代替の経路はありません。</p>
+            <p class="sub" style="font-size:14px;line-height:1.9">このブラウザでは配信を開始できません。不足している能力は次のとおりです。代替の経路はありません。</p>
             <div class="card">
               <div class="eb">Capabilities</div>
-              <div class="cap"><span>H.264 の映像エンコード</span><span class="chip warn"><i class="fa-solid fa-xmark"></i>不足</span></div>
-              <div class="cap"><span>AAC-LC の音声エンコード（44.1 kHz・2 ch）</span><span class="chip ok"><i class="fa-solid fa-check"></i>利用可</span></div>
-              <div class="cap"><span>ワーカー上でのフレーム取得と描画</span><span class="chip warn"><i class="fa-solid fa-xmark"></i>不足</span></div>
-              <div class="cap"><span>WebSocket</span><span class="chip ok"><i class="fa-solid fa-check"></i>利用可</span></div>
+              <sc-for list="{{ caps }}" as="c">
+                <div class="cap"><span>{{ c.name }}<small>{{ c.lack }}</small></span><span class="{{ c.chipCls }}"><i class="{{ c.chipIcon }}"></i>{{ c.chipText }}</span></div>
+              </sc-for>
             </div>
             <div class="banner info"><i class="fa-solid fa-circle-info"></i><div>保証する環境は、デスクトップ向けの Chrome・Edge の最新版です。モバイルは保証しません。画面共有 API が提供されず、画面の消灯やアプリの切り替えで取得が止まるためです。</div></div>
           </div>
@@ -158,101 +188,69 @@
             <div class="stack">
               <div class="head"><h1 class="h1">Studio</h1><span class="sub">{{ headSub }}</span></div>
               <div class="pv">
-                <sc-if value="{{ isCamOnly }}"><div class="ph">CAMERA — placeholder<br>実際の送出と同一の構図</div></sc-if>
-                <sc-if value="{{ isComposite }}">
-                  <div class="ph">SCREEN SHARE · 主映像 — placeholder</div>
-                  <div class="ph wipe">CAMERA<br>wipe</div>
-                </sc-if>
-                <sc-if value="{{ isEnded }}"><div class="ph">配信は終了しました</div></sc-if>
-                <sc-if value="{{ isCamOnly }}"><div class="badge"><i class="fa-regular fa-circle"></i>待機</div></sc-if>
-                <sc-if value="{{ isStarting }}"><div class="badge go"><i class="fa-solid fa-circle-notch"></i>計測中</div></sc-if>
-                <sc-if value="{{ isLive }}"><div class="badge live"><i class="fa-solid fa-circle"></i>LIVE<span>12:34</span></div></sc-if>
-                <sc-if value="{{ isDegraded }}"><div class="badge warn"><i class="fa-solid fa-triangle-exclamation"></i>劣化<span>31:08</span></div></sc-if>
-                <sc-if value="{{ isEnded }}"><div class="badge"><i class="fa-solid fa-stop"></i>終了</div></sc-if>
+                <sc-if value="{{ pvSlate }}"><div class="ph">代替スレート — placeholder<br>映像ソースがありません</div></sc-if>
+                <sc-if value="{{ pvCamera }}"><div class="ph">CAMERA — placeholder<br>実際の送出と同一の構図</div></sc-if>
+                <sc-if value="{{ pvScreen }}"><div class="ph">SCREEN SHARE · 主映像 — placeholder</div></sc-if>
+                <sc-if value="{{ pvWipe }}"><div class="ph wipe">CAMERA<br>wipe</div></sc-if>
+                <sc-if value="{{ pvEnded }}"><div class="ph">配信は終了しました</div></sc-if>
+                <div class="{{ badgeCls }}" role="status" aria-live="polite"><i class="{{ badgeIcon }}"></i>{{ badgeText }}<span>{{ badgeTime }}</span></div>
               </div>
-              <sc-if value="{{ isDegraded }}">
-                <div class="banner"><i class="fa-solid fa-triangle-exclamation"></i><div><b>送出ビットレートが目標を下回っています。</b> 回線が下限を下回った場合は劣化の表示のうえ配信を継続し、映像が届かない状態が続けば終了します。画面共有が終了したため、映像はカメラのみで継続しています。</div></div>
+              <sc-if value="{{ showNotice }}">
+                <div class="{{ noticeCls }}"><i class="{{ noticeIcon }}"></i><div><b>{{ noticeTitle }}</b> {{ noticeBody }}</div></div>
               </sc-if>
-              <sc-if value="{{ isNoConnect }}">
-                <div class="ctl">
-                  <button class="btn dis">配信を開始</button>
-                  <div class="why grow"><i class="fa-solid fa-triangle-exclamation"></i><div>YouTube が未接続のため、配信を開始できません。右の案内から YouTube を接続してください。接続前でも、ソースの準備とプレビューは使えます。</div></div>
-                </div>
-              </sc-if>
-              <sc-if value="{{ isReady }}">
-                <div class="ctl">
-                  <button class="btn pri" onClick="{{ toDialog }}"><i class="fa-solid fa-angles-right"></i>配信を開始</button>
-                  <div class="grow note" style="font-size:13px">ソース 2 件を取得済み。タイトルと公開範囲は次の画面で確認します。</div>
-                </div>
-              </sc-if>
-              <sc-if value="{{ isStarting }}">
-                <div class="ctl" style="flex-direction:column;align-items:stretch">
+              <div class="ctl">
+                <button class="{{ pCls }}" onClick="{{ pGo }}"><i class="{{ pIcon }}"></i>{{ pLabel }}</button>
+                <button class="{{ sCls }}" onClick="{{ sGo }}"><i class="{{ sIcon }}"></i>{{ sLabel }}</button>
+                <div class="grow ctlt">{{ ctlText }}</div>
+                <div class="{{ urlCls }}"><i class="fa-solid fa-link" style="color:var(--teal)"></i><span>https://youtube.com/live/xxxxxxxxxxx</span><button class="btn sm"><i class="fa-regular fa-copy"></i>複製</button></div>
+              </div>
+              <sc-if value="{{ showStages }}">
+                <div class="card">
+                  <div class="eb">Progress</div>
                   <ol class="stages">
-                    <sc-for list="{{ stages }}" as="g"><li class="{{ g.cls }}"><b>{{ g.en }}</b>{{ g.text }}</li></sc-for>
+                    <sc-for list="{{ stages }}" as="g"><li class="{{ g.cls }}"><b><i class="{{ g.icon }}"></i>{{ g.jp }}</b>{{ g.text }}</li></sc-for>
                   </ol>
-                  <div class="acts" style="justify-content:space-between">
-                    <span class="note">回線の計測結果：標準（720p）・映像 4,500 kbps から開始。ライブ確定前の取り消しは、利用枠を消費しません。</span>
-                    <button class="btn sec" onClick="{{ toIdle }}">取り消し</button>
-                  </div>
-                </div>
-              </sc-if>
-              <sc-if value="{{ isLiveCtl }}">
-                <div class="ctl">
-                  <button class="btn stop" onClick="{{ toEnded }}"><i class="fa-solid fa-stop"></i>配信を停止</button>
-                  <div class="url"><i class="fa-solid fa-link" style="color:var(--teal)"></i><span>https://youtube.com/live/xxxxxxxxxxx</span><button class="btn sm"><i class="fa-regular fa-copy"></i>複製</button></div>
+                  <div class="note">{{ stageNote }}</div>
                 </div>
               </sc-if>
               <sc-if value="{{ isEnded }}">
-                <div class="ctl" style="flex-direction:column;align-items:stretch;gap:16px">
+                <div class="card">
                   <div class="eb">Summary</div>
                   <div class="end">
-                    <div class="m"><div class="l">終了理由</div><div class="v" style="font-size:16px">利用者の操作</div></div>
-                    <div class="m"><div class="l">配信時間</div><div class="v">31:42</div></div>
-                    <div class="m"><div class="l">YouTube 上の配信</div><div class="v" style="font-size:16px"><a href="#" style="color:var(--teal)">YouTube で開く <i class="fa-solid fa-arrow-up-right-from-square"></i></a></div></div>
-                    <div class="m"><div class="l">次に開始できる時刻</div><div class="v" style="font-size:16px">明日 03:00 JST</div></div>
+                    <div class="m"><div class="l">終了理由</div><div class="v">{{ endReason }}</div></div>
+                    <div class="m"><div class="l">配信時間</div><div class="v">{{ endDuration }}</div></div>
+                    <div class="m"><div class="l">YouTube 上の配信</div><div class="v">{{ endLink }}</div></div>
+                    <div class="m"><div class="l">次に開始できる時刻</div><div class="v">{{ endNext }}</div></div>
                   </div>
+                  <sc-if value="{{ showEndGuide }}">
+                    <div class="kv"><span>原因</span><b>{{ endCause }}</b></div>
+                    <div class="kv"><span>対処</span><b>{{ endAction }}</b></div>
+                  </sc-if>
                 </div>
               </sc-if>
-              <sc-if value="{{ showSources }}">
-                <div class="eb">Sources</div>
-                <div class="srcs">
-                  <sc-for list="{{ sources }}" as="s">
-                    <div class="src">
-                      <div class="n"><i class="{{ s.icon }}"></i>{{ s.name }}</div>
-                      <span class="{{ s.chipCls }}"><i class="{{ s.chipIcon }}"></i>{{ s.chipText }}</span>
-                      <div class="dev"><span>{{ s.device }}</span><i class="fa-solid fa-chevron-down"></i></div>
-                    </div>
-                  </sc-for>
-                </div>
-              </sc-if>
+              <div class="card">
+                <div class="eb">Usage</div>
+                <div class="kv"><span>当該利用日の利用枠の残り</span><b>{{ usageRemain }}</b></div>
+                <div class="kv"><span>次に開始できる時刻</span><b>{{ usageNext }}</b></div>
+                <div class="kv"><span>当月の受付</span><b>{{ usageMonth }}</b></div>
+              </div>
             </div>
             <aside class="stack">
               <div class="card">
-                <div class="eb">Health</div>
-                <div class="hg">
-                  <sc-for list="{{ metrics }}" as="x"><div class="{{ x.cls }}"><div class="l">{{ x.label }}</div><div class="v">{{ x.value }}<small>{{ x.unit }}</small></div></div></sc-for>
-                </div>
+                <div class="eb">Sources</div>
+                <sc-for list="{{ sources }}" as="s">
+                  <div class="srow">
+                    <div class="n"><i class="{{ s.icon }}"></i>{{ s.name }}<span class="{{ s.chipCls }}"><i class="{{ s.chipIcon }}"></i>{{ s.chipText }}</span></div>
+                    <div class="ln"><div class="dev"><span>{{ s.device }}</span><i class="fa-solid fa-chevron-down"></i></div><button class="{{ s.actCls }}">{{ s.actLabel }}</button></div>
+                  </div>
+                </sc-for>
               </div>
               <div class="card">
-                <div class="eb">Usage</div>
-                <div class="kv"><span>利用枠の残り</span><b>{{ usageText }}</b></div>
-                <div class="kv"><span>次に開始できる時刻</span><b>{{ usageNext }}</b></div>
-                <div class="kv" style="border-bottom:0"><span>当月の受付</span><b>受付中</b></div>
+                <div class="eb">Health</div>
+                <div class="hg">
+                  <sc-for list="{{ metrics }}" as="x"><div class="{{ x.cls }}"><div class="l"><i class="{{ x.icon }}"></i>{{ x.label }}</div><div class="v">{{ x.value }}<small>{{ x.unit }}</small></div></div></sc-for>
+                </div>
               </div>
-              <sc-if value="{{ isNoConnect }}">
-                <div class="card" style="border-color:var(--warn)">
-                  <div class="eb">YouTube</div>
-                  <div class="why"><i class="fa-solid fa-triangle-exclamation"></i><div>YouTube が未接続です。接続すると、配信枠の作成と終了の清算に、あなたのチャンネルの権限を使います。配信キーは扱いません。</div></div>
-                  <button class="btn pri sm"><i class="fa-brands fa-youtube"></i>YouTube を接続</button>
-                </div>
-              </sc-if>
-              <sc-if value="{{ isConnected }}">
-                <div class="card">
-                  <div class="eb">YouTube</div>
-                  <div class="kv"><span>接続</span><b style="color:var(--teal)"><i class="fa-solid fa-check"></i> 接続済み</b></div>
-                  <div class="kv" style="border-bottom:0"><span>ライブ配信</span><b>有効</b></div>
-                </div>
-              </sc-if>
               <div class="card">
                 <div class="eb">Log</div>
                 <ul class="log">
@@ -264,10 +262,10 @@
         </sc-if>
         <sc-if value="{{ isDialog }}">
           <div class="overlay">
-            <div class="dlg" data-screen-label="Start dialog">
+            <div class="dlg" data-screen-label="Start dialog" role="dialog" aria-label="配信の開始">
               <div class="eb">Start</div>
               <h2>Go <em style="color:var(--teal);text-shadow:var(--text-glow-hero-em)">Live.</em></h2>
-              <div class="fld"><label><span>タイトル</span><span style="font-variant-numeric:tabular-nums">残り 80 文字</span></label><input value="ブラウザからの配信 2026-10-06"></div>
+              <div class="fld"><label><span>タイトル</span><span style="font-variant-numeric:tabular-nums">残り 78 文字</span></label><input value="ライブ配信 2026-10-06 21:30"></div>
               <div class="fld"><label><span>公開範囲</span><span>既定：限定公開</span></label>
                 <div class="seg"><button>公開</button><button class="on">限定公開</button><button>非公開</button></div>
               </div>
@@ -281,13 +279,13 @@
               </ul>
               <div class="acts">
                 <span class="note grow">{{ dlgNote }}</span>
-                <button class="btn sec" onClick="{{ toIdle }}">キャンセル</button>
+                <button class="btn" onClick="{{ toIdle }}">キャンセル</button>
                 <button class="{{ startCls }}" onClick="{{ startGo }}">配信を開始</button>
               </div>
             </div>
           </div>
         </sc-if>
-        <footer class="foot" style="margin-top:auto"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a></footer>
+        <footer class="foot"><a href="Terms.dc.html">利用規約</a><a href="Privacy.dc.html">プライバシーポリシー</a></footer>
       </div>
     </x-dc>
     <script type="text/x-dc" data-dc-script data-props='{
@@ -298,67 +296,254 @@
           const st = this.state || {};
           const s = st.s || 'idle';
           const kid = st.kid || '';
-          const go = (k) => () => this.setState({ s: k });
-          const defs = [['idle','待機'],['noconnect','YouTube 未接続'],['dialog','開始ダイアログ'],['starting','開始中'],['live','配信中'],['degraded','劣化'],['ended','終了'],['unsupported','非対応環境']];
-          const tabs = defs.map(([k, l]) => ({ label: l, cls: s === k ? 'tab on' : 'tab', go: go(k) }));
-          const isLive = s === 'live', isDegraded = s === 'degraded', isEnded = s === 'ended', isStarting = s === 'starting';
-          const isNoConnect = s === 'noconnect', isDialog = s === 'dialog', isUnsupported = s === 'unsupported';
-          const isReady = s === 'idle' || s === 'dialog';
-          const isCamOnly = s === 'idle' || s === 'noconnect' || s === 'dialog';
-          const isComposite = isStarting || isLive || isDegraded;
-          const spent = isLive || isDegraded || isEnded;
-          const ok = { chipCls: 'chip ok', chipIcon: 'fa-solid fa-check', chipText: '取得済み' };
-          const none = { chipCls: 'chip', chipIcon: 'fa-regular fa-circle', chipText: '未取得' };
-          const lost = { chipCls: 'chip warn', chipIcon: 'fa-solid fa-triangle-exclamation', chipText: '喪失' };
-          const screen = (isLive || isStarting) ? ok : (isDegraded ? lost : none);
+          const defaultV = { idle: 'ready', starting: 'prepare', live: 'normal', ended: 'user' };
+          const v = st.v || defaultV[s] || '';
+          const r = st.r || 'full';
+          const goState = (k) => () => this.setState({ s: k, v: defaultV[k] || '' });
+          const goVariant = (k) => () => this.setState({ v: k });
+          const goReason = (k) => () => this.setState({ r: k, v: 'rejected' });
+          const noop = () => {};
+
+          // ---- 状態・分岐の一覧（モックの切り替え用） ----
+          const stateDefs = [['idle','待機'],['dialog','開始ダイアログ'],['requesting','受付中'],['connecting','接続中'],['probing','計測中'],['starting','開始中'],['live','配信中'],['degraded','劣化'],['reconnecting','再接続中'],['stopping','停止中'],['ended','終了'],['unsupported','非対応環境']];
+          const ends = {
+            user:     { label: '利用者の停止', user: true, live: true, yt: true, dur: '31:42', cause: '', action: '' },
+            limit:    { label: '時間上限', user: false, live: true, yt: true, dur: '60:00', cause: '1 配信 60 分の上限に達しました。', action: '次の利用日（JST 03:00）以降に開始できます。' },
+            lost:     { label: '接続喪失', user: false, live: true, yt: true, dur: '24:48', cause: '中継との接続が、期限内に復帰しませんでした。', action: '回線を確認して、あらためて開始してください。' },
+            ytend:    { label: 'YouTube 側で終了', user: false, live: true, yt: true, dur: '18:20', cause: 'YouTube 側で配信が終了しました。', action: 'YouTube で配信の状態を確認してください。' },
+            revoked:  { label: '認可失効', user: false, live: true, yt: false, dur: '09:12', cause: 'YouTube への許可が失効しました。', action: 'アカウント画面で、YouTube を再接続してください。' },
+            admin:    { label: '管理者による停止', user: false, live: true, yt: true, dur: '15:05', cause: '管理者が配信を停止しました。', action: 'しばらくしてから、あらためて開始してください。' },
+            starttmo: { label: '開始タイムアウト', user: false, live: false, yt: false, dur: '—', cause: '開始の手続きが、決められた時間内に進みませんでした。', action: 'あらためて開始してください。利用枠は消費していません。' },
+            conftmo:  { label: '確定タイムアウト', user: false, live: false, yt: true, dur: '—', cause: 'YouTube でライブになるまでに、120 秒を超えました。', action: 'あらためて開始してください。利用枠は消費していません。' },
+            prepfail: { label: '準備の失敗', user: false, live: false, yt: false, dur: '—', cause: 'YouTube の配信の準備に失敗しました。', action: '時間を置いて、あらためて開始してください。利用枠は消費していません。' },
+            prior:    { label: '先行配信が未清算', user: false, live: false, yt: false, dur: '—', cause: '以前の配信の終了処理が完了していません。', action: '1〜2 分後に、あらためて開始してください。利用枠は消費していません。' },
+            noline:   { label: '回線不足', user: false, live: false, yt: false, dur: '—', cause: '上り回線が 1,200 kbps に満たないため、配信を開始できません。', action: '回線を改善して、あらためて開始してください。利用枠は消費していません。' },
+            cancel:   { label: '利用者の取り消し', user: true, live: false, yt: false, dur: '—', cause: '', action: '' },
+            relayoff: { label: '中継による切断', user: false, live: true, yt: true, dur: '07:30', cause: '受信量が上限を超えたため、中継が接続を切断しました。', action: '当該の配信へ再接続はできません。あらためて開始してください。' }
+          };
+          const endOrder = ['user','limit','lost','ytend','revoked','admin','starttmo','conftmo','prepfail','prior','noline','cancel','relayoff'];
+          const rejects = {
+            input:     { label: '入力不備', icon: 'fa-solid fa-circle-exclamation', body: '入力に不備があります。該当の項目を直してください。', act: 'fix' },
+            login:     { label: '未ログイン', icon: 'fa-solid fa-right-to-bracket', body: 'ログインしていません。ログインしてください。', act: 'login' },
+            rate:      { label: '頻度超過', icon: 'fa-solid fa-gauge-high', body: '受付の回数が上限を超えました。21:40 以降に、再試行してください。', act: 'retry' },
+            bot:       { label: 'bot 判定', icon: 'fa-solid fa-shield-halved', body: '確認に失敗しました。時間を置いて、再試行してください。', act: 'retry' },
+            busy:      { label: '進行中の配信あり', icon: 'fa-solid fa-tower-broadcast', body: '進行中の配信があります。配信に復帰するか、停止してください。', act: 'resume' },
+            noconn:    { label: 'YouTube 未接続', icon: 'fa-brands fa-youtube', body: 'YouTube が未接続です。接続してください。', act: 'connect' },
+            revoked:   { label: '認可失効', icon: 'fa-solid fa-circle-xmark', body: 'YouTube への許可が失効しています。再接続してください。', act: 'reconnect' },
+            nolive:    { label: 'ライブ未有効', icon: 'fa-solid fa-triangle-exclamation', body: 'ライブ配信が有効ではありません。YouTube で有効にして、再確認してください。', act: 'recheck' },
+            allowance: { label: '利用枠消費済み', icon: 'fa-regular fa-clock', body: '本日の利用枠は消費済みです。明日 03:00（JST）以降に開始できます。', act: 'none' },
+            attempts:  { label: '試行上限', icon: 'fa-regular fa-clock', body: '本日の開始の試行回数が上限に達しました。明日 03:00（JST）以降に開始できます。', act: 'none' },
+            paused:    { label: '受付停止', icon: 'fa-solid fa-pause', body: '現在、新規の受付を停止しています。', act: 'none' },
+            transfer:  { label: '転送量の予算超過', icon: 'fa-solid fa-calendar-xmark', body: '当月の受付は終了しました。来月に、あらためて開始してください。', act: 'none' },
+            full:      { label: '満員', icon: 'fa-solid fa-users', body: '現在、配信が満員です。時間を置いて、再試行してください。', act: 'retry' },
+            quota:     { label: 'API 割り当て不足', icon: 'fa-solid fa-hourglass-half', body: '本日の受付は、YouTube API の割り当て不足のため停止しています。16:00（JST）ごろ以降に再開します。', act: 'none' }
+          };
+          const rejectOrder = ['input','login','rate','bot','busy','noconn','revoked','nolive','allowance','attempts','paused','transfer','full','quota'];
+          const idleVariants = [['ready','開始できる'],['noconnect','YouTube 未接続'],['nolive','ライブ未有効'],['revoked','認可失効'],['used','利用枠消費済み'],['monthend','当月の受付終了'],['resume','配信に復帰'],['perm','ソースの許可'],['noshare','画面共有 API なし'],['rejected','開始の拒否']];
+          const variantDefs = {
+            idle: idleVariants,
+            starting: [['prepare','準備'],['confirm','確定待ち']],
+            live: [['normal','通常'],['warn5','時間上限の予告'],['ytwarn','YouTube の警告'],['lost','画面共有の喪失']],
+            ended: endOrder.map((k) => [k, ends[k].label])
+          };
+
+          const tabs = stateDefs.map(([k, l]) => ({ label: l, cls: s === k ? 'tab on' : 'tab', go: goState(k) }));
+          const variants = (variantDefs[s] || []).map(([k, l]) => ({ label: l, cls: v === k ? 'tab on' : 'tab', go: goVariant(k) }));
+          const reasons = rejectOrder.map((k) => ({ label: rejects[k].label, cls: r === k ? 'tab on' : 'tab', go: goReason(k) }));
+          const hasVariants = !!variantDefs[s];
+          const isRejected = s === 'idle' && v === 'rejected';
+
+          // ---- 状態の分類 ----
+          const isDialog = s === 'dialog';
+          const isUnsupported = s === 'unsupported';
+          const isEnded = s === 'ended';
+          const inStart = ['requesting','connecting','probing','starting'].indexOf(s) >= 0;
+          const inLive = ['live','degraded','reconnecting','stopping'].indexOf(s) >= 0;
+          const e = ends[v] || ends.user;
+          const consumed = inLive || (isEnded && e.live) || (s === 'idle' && (v === 'used' || (v === 'rejected' && (r === 'allowance' || r === 'attempts'))));
+          const monthEnd = (s === 'idle' && (v === 'monthend' || (v === 'rejected' && r === 'transfer')));
+
+          // ---- ソース（要件 11.2・25.5：未取得・要求中・取得済み・拒否・喪失） ----
+          const chipOf = { detached: ['chip', 'fa-regular fa-circle', '未取得'], requesting: ['chip', 'fa-solid fa-circle-notch fa-spin', '要求中'], active: ['chip ok', 'fa-solid fa-check', '取得済み'], denied: ['chip bad', 'fa-solid fa-ban', '拒否'], lost: ['chip warn', 'fa-solid fa-triangle-exclamation', '喪失'], na: ['chip', 'fa-solid fa-minus', '利用不可'] };
+          const actOf = { detached: ['btn sm', '取得'], requesting: ['btn sm none', ''], active: ['btn sm', '解除'], denied: ['btn sm', '再要求'], lost: ['btn sm', '再取得'], na: ['btn sm dis', '取得'] };
+          let scene = { cam: 'active', mic: 'active', scr: 'detached', aud: 'detached' };
+          if (s === 'idle' && v === 'perm') scene = { cam: 'requesting', mic: 'denied', scr: 'detached', aud: 'detached' };
+          else if (s === 'idle' && v === 'noshare') scene = { cam: 'active', mic: 'active', scr: 'na', aud: 'na' };
+          else if (s === 'live' && v === 'lost') scene = { cam: 'active', mic: 'active', scr: 'lost', aud: 'lost' };
+          else if (inStart || inLive || isEnded) scene = { cam: 'active', mic: 'active', scr: 'active', aud: 'active' };
+          const srcRow = (icon, name, key, device) => ({ icon: icon, name: name, chipCls: chipOf[scene[key]][0], chipIcon: chipOf[scene[key]][1], chipText: chipOf[scene[key]][2], device: device, actCls: actOf[scene[key]][0], actLabel: actOf[scene[key]][1] });
           const sources = [
-            Object.assign({ icon: 'fa-solid fa-video', name: 'カメラ', device: 'Integrated Camera' }, ok),
-            Object.assign({ icon: 'fa-solid fa-microphone', name: 'マイク', device: 'Default - Microphone' }, ok),
-            Object.assign({ icon: 'fa-solid fa-display', name: '画面共有', device: isDegraded ? '共有が終了しました' : (screen === ok ? 'ウィンドウ：Slides' : '共有する画面を選択') }, screen)
+            srcRow('fa-solid fa-video', 'カメラ', 'cam', scene.cam === 'active' ? 'Integrated Camera' : 'デバイスを選択'),
+            srcRow('fa-solid fa-microphone', 'マイク', 'mic', scene.mic === 'active' ? 'Default - Microphone' : 'デバイスを選択'),
+            srcRow('fa-solid fa-display', '画面共有', 'scr', scene.scr === 'active' ? 'ウィンドウ：Slides' : (scene.scr === 'lost' ? '共有が終了しました' : (scene.scr === 'na' ? 'この環境では提供しません' : '共有する画面を選択'))),
+            srcRow('fa-solid fa-volume-high', '共有音声', 'aud', scene.aud === 'active' ? '画面共有の音声' : (scene.aud === 'lost' ? '共有が終了しました' : (scene.aud === 'na' ? 'この環境では提供しません' : '画面共有と同時に取得')))
           ];
+          const camOn = scene.cam === 'active', scrOn = scene.scr === 'active';
+
+          // ---- プレビュー（要件 11.3：レイアウトの解決） ----
+          const pvEnded = isEnded;
+          const pvScreen = !isEnded && scrOn;
+          const pvWipe = !isEnded && scrOn && camOn;
+          const pvCamera = !isEnded && !scrOn && camOn;
+          const pvSlate = !isEnded && !scrOn && !camOn;
+
+          // ---- 状態表示（文言と形の異なる図形） ----
+          const badges = {
+            idle: ['badge', 'fa-regular fa-circle', '待機', ''],
+            dialog: ['badge', 'fa-regular fa-circle', '待機', ''],
+            requesting: ['badge go', 'fa-solid fa-hourglass-half', '受付中', ''],
+            connecting: ['badge go', 'fa-solid fa-plug', '接続中', ''],
+            probing: ['badge go', 'fa-solid fa-gauge-high', '計測中', ''],
+            starting: ['badge go', 'fa-solid fa-circle-notch fa-spin', '開始中', ''],
+            live: ['badge live', 'fa-solid fa-circle', 'ライブ', v === 'warn5' ? '55:00' : (v === 'ytwarn' ? '20:10' : (v === 'lost' ? '18:02' : '12:34'))],
+            degraded: ['badge warn', 'fa-solid fa-triangle-exclamation', '劣化', '31:08'],
+            reconnecting: ['badge warn', 'fa-solid fa-rotate fa-spin', '再接続中', '24:15'],
+            stopping: ['badge go', 'fa-solid fa-circle-notch fa-spin', '停止中', '31:42'],
+            ended: ['badge', 'fa-solid fa-stop', '終了', '']
+          };
+          const bd = badges[s] || badges.idle;
+
+          // ---- 接続の案内・拒否・警告（通知：情報・警告・エラー。エラーは対処の操作を伴う） ----
+          let notice = null;
+          if (s === 'idle' && v === 'noconnect') notice = ['banner', 'fa-solid fa-triangle-exclamation', 'YouTube が未接続です。', '接続すると、配信できます。接続前でも、ソースの準備とプレビューは使えます。'];
+          else if (s === 'idle' && v === 'nolive') notice = ['banner', 'fa-solid fa-triangle-exclamation', 'ライブ配信が有効ではありません。', 'YouTube 側でライブ配信を有効にしてください。有効にするまでに時間がかかる場合があります。有効にしたら「再確認」を操作してください。'];
+          else if (s === 'idle' && v === 'revoked') notice = ['banner bad', 'fa-solid fa-circle-xmark', 'YouTube への許可が失効しています。', '再接続してください。'];
+          else if (s === 'idle' && v === 'noshare') notice = ['banner info', 'fa-solid fa-circle-info', 'この環境では、画面共有を提供しません。', 'カメラとマイクで配信できます。'];
+          else if (s === 'idle' && v === 'monthend') notice = ['banner', 'fa-solid fa-calendar-xmark', '当月の受付は終了しました。', '来月に、あらためて開始してください。'];
+          else if (s === 'idle' && v === 'used') notice = ['banner info', 'fa-regular fa-clock', '本日の利用枠は消費済みです。', '明日 03:00（JST）以降に開始できます。'];
+          else if (s === 'idle' && v === 'resume') notice = ['banner info', 'fa-solid fa-rotate', '進行中の配信があります。', 'この配信は、中断の期限内です。復帰では、権限が保持されているカメラとマイクを再取得し、確定済みのプロファイルで再開します。画面共有は、復帰後に取得し直してください。'];
+          else if (isRejected) notice = [r === 'revoked' ? 'banner bad' : 'banner', rejects[r].icon, '開始できませんでした（' + rejects[r].label + '）。', rejects[r].body];
+          else if (s === 'live' && v === 'warn5') notice = ['banner', 'fa-regular fa-clock', '残り 5 分で配信を終了します。', '時間上限（60 分）に達すると、自動で終了します。'];
+          else if (s === 'live' && v === 'ytwarn') notice = ['banner', 'fa-solid fa-triangle-exclamation', 'YouTube から、ストリームの健全性に問題が報告されています。', '配信は継続しています。'];
+          else if (s === 'live' && v === 'lost') notice = ['banner', 'fa-solid fa-triangle-exclamation', '画面共有が終了しました。', '映像の構成から外して、カメラのみで継続しています。'];
+          else if (s === 'degraded') notice = ['banner', 'fa-solid fa-triangle-exclamation', '回線が不足しています。', 'ビットレートは下限です。配信は継続しますが、映像が届かない状態が続くと終了します。'];
+          else if (s === 'reconnecting') notice = ['banner', 'fa-solid fa-rotate', '中継との接続が切れました。自動で再接続しています。', '合成とエンコードは継続しています。操作は要りません。'];
+
+          // ---- 配信制御（次に取れる操作を 1 つ強調する） ----
+          const act = isRejected ? rejects[r].act : (s === 'idle' ? ({ noconnect: 'connect', nolive: 'recheck', revoked: 'reconnect', resume: 'resume', used: 'none', monthend: 'none' }[v] || 'start') : 'x');
+          const pri = (label, icon) => ({ pCls: 'btn pri', pIcon: icon, pLabel: label, pGo: noop });
+          const blockedStart = { sCls: 'btn dis', sIcon: 'fa-solid fa-angles-right', sLabel: '配信を開始' };
+          const cancelText = 'ライブ確定前の取り消しは、利用枠を消費しません。';
+          const spin = 'fa-solid fa-circle-notch fa-spin';
+          let ctl = { pCls: 'btn none', pIcon: '', pLabel: '', pGo: noop, sCls: 'btn none', sIcon: '', sLabel: '', sGo: noop, text: '' };
+          if (s === 'idle' || isDialog) {
+            if (act === 'start') ctl = Object.assign(ctl, { pCls: 'btn pri', pIcon: 'fa-solid fa-angles-right', pLabel: '配信を開始', pGo: goState('dialog'), text: 'ソースを確認してから開始します。' });
+            else if (act === 'connect') ctl = Object.assign(ctl, pri('YouTube を接続', 'fa-brands fa-youtube'), blockedStart, { text: 'YouTube が未接続のため、配信を開始できません。' });
+            else if (act === 'recheck') ctl = Object.assign(ctl, pri('再確認', 'fa-solid fa-rotate'), blockedStart, { text: 'ライブ配信の有効化を確認します。1 分に 1 回、1 日 20 回までです。' });
+            else if (act === 'reconnect') ctl = Object.assign(ctl, pri('再接続', 'fa-brands fa-youtube'), blockedStart, { text: 'YouTube への許可が失効しているため、配信を開始できません。' });
+            else if (act === 'resume') ctl = Object.assign(ctl, pri('配信に復帰', 'fa-solid fa-rotate'), { sCls: 'btn stop', sIcon: 'fa-solid fa-stop', sLabel: '配信を停止', sGo: goState('stopping'), text: '復帰するか、停止してください。' });
+            else if (act === 'retry') ctl = Object.assign(ctl, { pCls: 'btn pri', pIcon: 'fa-solid fa-rotate-right', pLabel: '再試行', pGo: goState('dialog'), text: '時間を置いてから、再試行できます。' });
+            else if (act === 'login') ctl = Object.assign(ctl, pri('ログイン', 'fa-solid fa-right-to-bracket'), { text: 'ログインすると、配信を開始できます。' });
+            else if (act === 'fix') ctl = Object.assign(ctl, { pCls: 'btn pri', pIcon: 'fa-solid fa-pen', pLabel: '入力を修正', pGo: goState('dialog'), text: '該当の項目を直してください。' });
+            else ctl = Object.assign(ctl, { pCls: 'btn dis', pIcon: 'fa-solid fa-angles-right', pLabel: '配信を開始', text: '現在は開始できません。理由は上の案内を確認してください。' });
+          } else if (s === 'requesting') ctl = Object.assign(ctl, { pCls: 'btn pri dis', pIcon: spin, pLabel: '受付中…', sCls: 'btn', sLabel: '取り消し', sGo: goState('idle'), text: cancelText });
+          else if (s === 'connecting') ctl = Object.assign(ctl, { pCls: 'btn pri dis', pIcon: spin, pLabel: '接続中…', sCls: 'btn', sLabel: '取り消し', sGo: goState('idle'), text: cancelText });
+          else if (s === 'probing') ctl = Object.assign(ctl, { pCls: 'btn pri dis', pIcon: spin, pLabel: '計測中…', sCls: 'btn', sLabel: '取り消し', sGo: goState('idle'), text: cancelText });
+          else if (s === 'starting') ctl = Object.assign(ctl, { pCls: 'btn pri dis', pIcon: spin, pLabel: '開始中…', sCls: 'btn', sLabel: '取り消し', sGo: goState('idle'), text: cancelText });
+          else if (s === 'live' || s === 'degraded' || s === 'reconnecting') ctl = Object.assign(ctl, { pCls: 'btn stop', pIcon: 'fa-solid fa-stop', pLabel: '配信を停止', pGo: goState('stopping'), text: '' });
+          else if (s === 'stopping') ctl = Object.assign(ctl, { pCls: 'btn stop dis', pIcon: spin, pLabel: '停止中…', text: '' });
+          else if (isEnded) ctl = Object.assign(ctl, { pCls: 'btn pri', pIcon: 'fa-solid fa-xmark', pLabel: '閉じる', pGo: goState('idle'), text: '' });
+          const showUrl = s === 'live' || s === 'degraded' || s === 'reconnecting' || (s === 'starting' && v === 'confirm');
+
+          // ---- 開始中の段階表示（要件 16.4） ----
+          const stageNames = [['受付', '開始の条件を確認中', 'fa-regular fa-clipboard'], ['接続', '中継へ接続中', 'fa-solid fa-plug'], ['計測', '回線を計測中', 'fa-solid fa-gauge-high'], ['準備', 'YouTube の配信を準備中', 'fa-solid fa-gear'], ['確定', 'YouTube でライブになるのを待機中', 'fa-solid fa-hourglass-half'], ['配信中', '視聴 URL と経過時間', 'fa-solid fa-circle']];
+          const cur = s === 'requesting' ? 0 : (s === 'connecting' ? 1 : (s === 'probing' ? 2 : (s === 'starting' ? (v === 'confirm' ? 4 : 3) : -1)));
+          const stages = stageNames.map((g, i) => ({ cls: i < cur ? 'stg done' : (i === cur ? 'stg now' : 'stg'), jp: g[0], text: (i === 2 && cur > 2) ? '標準（720p）・4,500 kbps から開始' : g[1], icon: i < cur ? 'fa-solid fa-check' : g[2] }));
+          const showStages = inStart;
+
+          // ---- 健全性（要件 16.2：6 項目） ----
+          const mm = (label, value, unit, cls, icon) => ({ cls: cls || 'm', label: label, value: value, unit: unit || '', icon: icon || '' });
           const dash = '—';
-          const metrics = isLive ? [
-            { cls: 'm', label: '送出', value: '4,312', unit: 'kbps' }, { cls: 'm', label: '目標', value: '4,500', unit: 'kbps' },
-            { cls: 'm', label: '滞留時間', value: '0.4', unit: 's' }, { cls: 'm', label: '破棄フレーム', value: '0', unit: '' },
-            { cls: 'm', label: '経過', value: '12:34', unit: '' }, { cls: 'm', label: '残り', value: '47:26', unit: '' }
-          ] : isDegraded ? [
-            { cls: 'm warn', label: '送出 ▲', value: '2,740', unit: 'kbps' }, { cls: 'm', label: '目標', value: '3,600', unit: 'kbps' },
-            { cls: 'm warn', label: '滞留時間 ▲', value: '1.8', unit: 's' }, { cls: 'm warn', label: '破棄フレーム ▲', value: '37', unit: '' },
-            { cls: 'm', label: '経過', value: '31:08', unit: '' }, { cls: 'm', label: '残り', value: '28:52', unit: '' }
-          ] : [
-            { cls: 'm', label: '送出', value: dash, unit: '' }, { cls: 'm', label: '目標', value: dash, unit: '' },
-            { cls: 'm', label: '滞留時間', value: dash, unit: '' }, { cls: 'm', label: '破棄フレーム', value: dash, unit: '' },
-            { cls: 'm', label: '経過', value: isEnded ? '31:42' : dash, unit: '' }, { cls: 'm', label: '残り', value: dash, unit: '' }
+          const warnIcon = 'fa-solid fa-triangle-exclamation';
+          let metrics;
+          if (s === 'live') {
+            const t = v === 'warn5' ? ['55:00', '05:00'] : (v === 'ytwarn' ? ['20:10', '39:50'] : (v === 'lost' ? ['18:02', '41:58'] : ['12:34', '47:26']));
+            metrics = [mm('送出ビットレート', '4,312', 'kbps'), mm('目標ビットレート', '4,500', 'kbps'), mm('滞留時間', '0.4', 's'), mm('破棄フレーム数', '0'), mm('経過時間', t[0]), mm('残り時間', t[1])];
+          } else if (s === 'degraded') {
+            metrics = [mm('送出ビットレート', '2,740', 'kbps', 'm warn', warnIcon), mm('目標ビットレート', '3,000', 'kbps'), mm('滞留時間', '1.8', 's', 'm warn', warnIcon), mm('破棄フレーム数', '37', '', 'm warn', warnIcon), mm('経過時間', '31:08'), mm('残り時間', '28:52')];
+          } else if (s === 'reconnecting') {
+            metrics = [mm('送出ビットレート', dash), mm('目標ビットレート', '4,500', 'kbps'), mm('滞留時間', dash), mm('破棄フレーム数', dash), mm('経過時間', '24:15'), mm('残り時間', '35:45')];
+          } else if (s === 'stopping') {
+            metrics = [mm('送出ビットレート', dash), mm('目標ビットレート', dash), mm('滞留時間', dash), mm('破棄フレーム数', dash), mm('経過時間', '31:42'), mm('残り時間', dash)];
+          } else {
+            metrics = [mm('送出ビットレート', dash), mm('目標ビットレート', dash), mm('滞留時間', dash), mm('破棄フレーム数', dash), mm('経過時間', isEnded ? e.dur : dash), mm('残り時間', dash)];
+          }
+
+          // ---- 出来事の記録（要件 20.4：配信の出来事の種別） ----
+          const dot = 'fa-solid fa-circle t';
+          const warnDot = 'fa-solid fa-triangle-exclamation w';
+          const ev = (t, text, warn) => ({ t: t, icon: warn ? warnDot : dot, text: text });
+          let logs;
+          if (s === 'degraded') logs = [ev('31:08', '劣化開始', true), ev('30:48', '引き下げ：3,150 → 3,000 kbps', true), ev('30:20', '映像破棄：37 フレーム', true), ev('00:12', 'ライブ確定')];
+          else if (s === 'reconnecting') logs = [ev('24:15', '中断：中継との接続が切れました', true), ev('00:12', 'ライブ確定')];
+          else if (s === 'stopping') logs = [ev('31:42', '終了：利用者の停止'), ev('00:12', 'ライブ確定')];
+          else if (s === 'live' && v === 'warn5') logs = [ev('55:00', '時間上限の予告：残り 5 分', true), ev('00:12', 'ライブ確定')];
+          else if (s === 'live' && v === 'ytwarn') logs = [ev('20:10', 'YouTube 警告：ストリームの健全性', true), ev('00:12', 'ライブ確定')];
+          else if (s === 'live' && v === 'lost') logs = [ev('18:02', 'ソース喪失：画面共有・共有音声', true), ev('18:02', '映像の構成から外して継続', true), ev('00:12', 'ライブ確定')];
+          else if (s === 'live') logs = [ev('12:20', '引き上げ：4,300 → 4,500 kbps'), ev('00:12', 'ライブ確定'), ev('00:00', '送出開始')];
+          else if (s === 'starting') logs = v === 'confirm' ? [ev('', '送出開始'), ev('', '準備完了')] : [ev('', '準備開始')];
+          else if (s === 'probing') logs = [ev('', '照合')];
+          else if (s === 'connecting') logs = [ev('', '受理')];
+          else if (isEnded) logs = e.live ? [ev(e.dur, '終了：' + e.label, !e.user), ev('00:12', 'ライブ確定')] : [ev('', '終了：' + e.label, !e.user)];
+          else logs = [{ t: '', icon: '', text: 'まだ出来事はありません' }];
+          if (isEnded && e.yt) logs.unshift(ev('', '清算成功'));
+
+          // ---- 利用状況（要件 16.2・8.1） ----
+          const usageRemain = consumed ? '0 / 1' : '1 / 1';
+          const usageNext = consumed ? '明日 03:00（JST）' : '今すぐ';
+          const usageMonth = monthEnd ? '終了しました' : '受付中';
+
+          // ---- 終了時の表示（要件 16.5） ----
+          const endLink = e.yt ? '視聴ページを開く' : 'なし';
+          const endNext = e.live ? '明日 03:00（JST）' : '今すぐ';
+
+          // ---- ヘッダの状態表示（どこを見ていても配信中と分かるように） ----
+          let hdr = ['pill off', '', ''];
+          if (s === 'live') hdr = ['pill live', 'fa-solid fa-circle', 'ライブ'];
+          else if (s === 'degraded') hdr = ['pill warn', warnIcon, '劣化'];
+          else if (s === 'reconnecting') hdr = ['pill warn', 'fa-solid fa-rotate fa-spin', '再接続中'];
+          else if (s === 'stopping') hdr = ['pill', spin, '停止中'];
+
+          // ---- 非対応環境（要件 16.6・30.1） ----
+          const capRow = (name, lack, ok) => ({ name: name, lack: ok ? '' : lack, chipCls: ok ? 'chip ok' : 'chip warn', chipIcon: ok ? 'fa-solid fa-check' : 'fa-solid fa-xmark', chipText: ok ? '利用可' : '不足' });
+          const caps = [
+            capRow('H.264 の映像エンコード', '配信の開始を提供しません', false),
+            capRow('AAC-LC の音声エンコード（44.1 kHz・2 ch）', '配信の開始を提供しません', true),
+            capRow('ワーカー上でのフレーム取得と描画', '配信の開始を提供しません', false),
+            capRow('音声の処理周期での信号取得', '配信の開始を提供しません', true),
+            capRow('WebSocket', '配信の開始を提供しません', true),
+            capRow('画面共有 API（任意）', '画面共有の操作のみ提供しません', true),
+            capRow('タブ間の排他（任意）', 'サーバー側の排他のみで運用します', true)
           ];
-          const logs = isDegraded ? [
-            { t: '31:02', icon: 'fa-solid fa-triangle-exclamation w', text: '送出が目標を下回りました。ビットレートを抑制中' },
-            { t: '28:45', icon: 'fa-solid fa-triangle-exclamation w', text: '画面共有が終了しました。映像の構成から外して継続' },
-            { t: '00:12', icon: 'fa-solid fa-circle t', text: '配信が確定しました' }
-          ] : isLive ? [
-            { t: '00:12', icon: 'fa-solid fa-circle t', text: '配信が確定しました' },
-            { t: '00:00', icon: 'fa-solid fa-check t', text: '回線を計測。標準（720p）で開始' }
-          ] : isEnded ? [
-            { t: '31:42', icon: 'fa-solid fa-stop t', text: '利用者の操作で停止しました' },
-            { t: '00:12', icon: 'fa-solid fa-circle t', text: '配信が確定しました' }
-          ] : [ { t: '', icon: '', text: 'まだ出来事はありません' } ];
-          const names = [['受付','Accept','開始の条件を確認'], ['接続','Connect','中継へ接続'], ['計測','Probe','回線を計測'], ['準備','Prepare','YouTube の配信を準備'], ['確定','Confirm','ライブになるのを待機'], ['配信中','Live','視聴 URL と経過時間']];
-          const stages = names.map(([jp, en, tx], i) => ({ cls: i < 2 ? 'stg done' : (i === 2 ? 'stg now' : 'stg'), en: en, text: jp + '：' + tx }));
+
+          const headSubs = { idle: '準備ができたら、配信を開始します', dialog: '準備ができたら、配信を開始します', requesting: '開始の条件を確認しています', connecting: '中継へ接続しています', probing: '回線を計測しています', starting: 'YouTube の配信を準備しています', live: '配信中', degraded: '配信中（劣化）', reconnecting: '再接続しています', stopping: '配信を停止しています', ended: '配信は終了しました' };
           const kidOk = kid === 'yes' || kid === 'no';
+          const stageNote = s === 'starting' && v === 'confirm' ? '視聴 URL は、準備の完了時点で表示します。ライブ確定は最長 120 秒待ちます。' : 'いずれの段階でも取り消せます。' + cancelText;
+
           return {
-            tabs, isLive, isDegraded, isEnded, isStarting, isNoConnect, isDialog, isUnsupported, isReady, isCamOnly, isComposite,
-            isLiveCtl: isLive || isDegraded,
+            tabs, variants, reasons,
+            varRowCls: hasVariants ? 'mrow' : 'mrow off',
+            rejRowCls: isRejected ? 'mrow' : 'mrow off',
+            isDialog, isUnsupported, isEnded, caps,
             showStudio: !isUnsupported,
-            showSources: !isUnsupported && !isEnded,
-            isConnected: !isNoConnect,
-            headSub: isLive || isDegraded ? '配信中' : isEnded ? '配信は終了しました' : isStarting ? '配信を準備しています' : '準備ができたら配信を開始します',
-            usageText: spent ? '0 / 1' : '1 / 1',
-            usageNext: spent ? '明日 03:00 JST' : '今すぐ',
-            sources, metrics, logs, stages,
-            toDialog: go('dialog'), toIdle: go('idle'), toEnded: go('ended'),
+            headSub: headSubs[s] || '',
+            pvSlate, pvCamera, pvScreen, pvWipe, pvEnded,
+            badgeCls: bd[0], badgeIcon: bd[1], badgeText: bd[2], badgeTime: bd[3],
+            showNotice: !!notice,
+            noticeCls: notice ? notice[0] : 'banner off', noticeIcon: notice ? notice[1] : '', noticeTitle: notice ? notice[2] : '', noticeBody: notice ? notice[3] : '',
+            pCls: ctl.pCls, pIcon: ctl.pIcon, pLabel: ctl.pLabel, pGo: ctl.pGo, sCls: ctl.sCls, sIcon: ctl.sIcon, sLabel: ctl.sLabel, sGo: ctl.sGo, ctlText: ctl.text,
+            urlCls: showUrl ? 'url' : 'url off',
+            showStages, stages, stageNote,
+            endReason: e.label, endDuration: e.dur, endLink, endNext,
+            showEndGuide: !e.user, endCause: e.cause, endAction: e.action,
+            usageRemain, usageNext, usageMonth,
+            sources, metrics, logs,
+            hdrLiveCls: hdr[0], hdrLiveIcon: hdr[1], hdrLiveText: hdr[2],
+            toIdle: goState('idle'),
             pickYes: () => this.setState({ kid: 'yes' }), pickNo: () => this.setState({ kid: 'no' }),
             kidYesCls: kid === 'yes' ? 'on' : '', kidNoCls: kid === 'no' ? 'on' : '',
             startCls: kidOk ? 'btn pri' : 'btn dis',
-            startGo: kidOk ? go('starting') : () => {},
+            startGo: kidOk ? goState('requesting') : noop,
             dlgNote: kidOk ? '' : '子ども向けかどうかを選ぶと、開始できます。'
           };
         }

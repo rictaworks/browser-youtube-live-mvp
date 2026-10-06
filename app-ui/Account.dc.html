@@ -11,10 +11,13 @@
         <link rel="stylesheet" href="styles.css">
         <style>
           :root{--live:oklch(0.72 0.2 22);--live-bg:oklch(0.72 0.2 22 / 0.12);--warn:oklch(0.84 0.15 85);--warn-bg:oklch(0.84 0.15 85 / 0.1)}
-          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.6}
+          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.5}
           a{color:var(--silver);text-decoration:none}
           a:hover{color:var(--teal)}
+          a:focus-visible{outline:2px solid var(--white);outline-offset:3px}
           i{font-style:normal}
+          i[class=""]{display:none}
+          .off{display:none!important}
           .mock{position:sticky;top:0;z-index:70;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 40px;background:var(--bg-footer);border-bottom:1px dashed var(--silver-30)}
           .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;color:var(--silver-70);margin-right:6px}
           .tab{font:500 11px/1 var(--font-sans);padding:7px 10px;color:var(--silver);background:transparent;border:1px solid var(--silver-30);cursor:pointer;letter-spacing:.05em}
@@ -23,36 +26,40 @@
           .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
           .wm b{color:var(--teal);font-weight:600}
           .nav{display:flex;gap:28px;align-items:center}
-          .nav a{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
+          .nav a{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
           .nav a.on{color:var(--teal);text-shadow:var(--text-glow-step)}
           .page{width:100%;max-width:860px;margin:0 auto;padding:16px 40px 60px;display:flex;flex-direction:column;gap:20px}
           .h1{font:700 40px/1.1 var(--font-display)}
           .sub{color:var(--silver-70);font-size:13px;margin-left:16px}
-          .eb{font-size:10px;letter-spacing:.25em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
+          .eb{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
           .eb::after{content:"";flex:1;height:1px;background:var(--silver-10)}
           .card{border:1px solid var(--border);background:var(--card-bg);padding:22px 26px;display:flex;flex-direction:column;gap:16px}
           .card.danger{border-color:var(--live)}
           .kv{display:flex;justify-content:space-between;gap:12px;font-size:14px;padding:8px 0;border-bottom:1px solid var(--silver-08);align-items:center}
           .kv span:first-child{color:var(--silver-70)}
           .kv b{font-weight:500;color:var(--white);text-align:right}
-          .chip{display:inline-flex;gap:6px;align-items:center;font-size:12px;letter-spacing:.08em;padding:4px 10px;border:1px solid var(--silver-30);color:var(--silver)}
+          .chip{display:inline-flex;gap:6px;align-items:center;font-size:12px;letter-spacing:.08em;padding:4px 10px;border:1px solid var(--silver-60);color:var(--silver)}
           .chip.ok{border-color:var(--teal-50);color:var(--teal)}
           .chip.warn{border-color:var(--warn);color:var(--warn)}
           .chip.bad{border-color:var(--live);color:var(--white)}
           .chip.bad i{color:var(--live)}
-          .btn{font:600 12px/1 var(--font-sans);letter-spacing:.15em;padding:14px 24px;border:1px solid var(--silver-30);background:transparent;color:var(--silver);cursor:pointer;transition:var(--dur-fast);display:inline-flex;align-items:center;gap:10px}
+          .btn{font:600 12px/1 var(--font-sans);letter-spacing:.15em;padding:14px 24px;border:1px solid var(--silver-60);background:transparent;color:var(--silver);cursor:pointer;transition:var(--dur-fast);display:inline-flex;align-items:center;gap:10px}
           .btn:hover{color:var(--teal);border-color:var(--teal)}
           .btn:focus-visible{outline:2px solid var(--white);outline-offset:3px}
           .btn.pri{color:var(--teal);border-color:var(--teal);background:var(--teal-05)}
           .btn.pri:hover{background:var(--teal-dim);box-shadow:var(--glow-cta)}
           .btn.stop{color:var(--white);border-color:var(--live);background:var(--live-bg)}
-          .btn.dis{color:var(--silver-70);border-color:var(--silver-20);cursor:not-allowed}
-          .btn.dis:hover{color:var(--silver-70);border-color:var(--silver-20);box-shadow:none}
+          .btn.dis{color:var(--silver-70);border-color:var(--silver-40);cursor:not-allowed}
+          .btn.dis:hover{color:var(--silver-70);border-color:var(--silver-40);box-shadow:none;background:transparent}
           .acts{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
           .note{font-size:13px;color:var(--silver);line-height:1.8}
+          .fine{font-size:12px;color:var(--silver-70);line-height:1.6}
           .banner{display:flex;gap:14px;align-items:flex-start;padding:14px 18px;border:1px solid var(--warn);background:var(--warn-bg);font-size:13px}
           .banner i{color:var(--warn);margin-top:3px}
-          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-top:auto}
+          .banner.bad{border-color:var(--live);background:var(--live-bg)}
+          .banner.bad i{color:var(--live)}
+          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:12px;letter-spacing:.2em;text-transform:uppercase;margin-top:auto}
+          @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
           @media (max-width:767px){.page{padding:16px 20px 40px}.top,.mock{padding-left:20px;padding-right:20px}}
         </style>
       </helmet>
@@ -62,7 +69,7 @@
           <sc-for list="{{ tabs }}" as="t"><button class="{{ t.cls }}" onClick="{{ t.go }}">{{ t.label }}</button></sc-for>
         </div>
         <header class="top">
-          <div class="wm">Browser <b>Live</b></div>
+          <a class="wm" href="Landing.dc.html">Browser <b>Live</b></a>
           <nav class="nav"><a href="Studio.dc.html">Studio</a><a class="on" href="#">Account</a></nav>
         </header>
         <main class="page">
@@ -70,15 +77,24 @@
           <sc-if value="{{ isBusy }}">
             <div class="banner"><i class="fa-solid fa-triangle-exclamation"></i><div>配信中のため、接続の解除・アカウントの削除・再接続はできません。先に配信を停止してください。</div></div>
           </sc-if>
+          <sc-if value="{{ showNotice }}">
+            <div class="{{ noticeCls }}"><i class="{{ noticeIcon }}"></i><div><b>{{ noticeTitle }}</b> {{ noticeBody }}</div></div>
+          </sc-if>
           <div class="card">
             <div class="eb">YouTube</div>
             <div class="kv"><span>接続の状態</span><span class="{{ chipCls }}"><i class="{{ chipIcon }}"></i>{{ chipText }}</span></div>
+            <div class="{{ channelCls }}"><span>接続先のチャンネル</span><b>{{ channelName }}</b></div>
             <p class="note">{{ guide }}</p>
             <div class="acts">
-              <sc-if value="{{ showRecheck }}"><button class="btn"><i class="fa-solid fa-rotate"></i>再確認</button><span class="note" style="font-size:12px">再確認は 1 分に 1 回、1 日 20 回までです。</span></sc-if>
+              <sc-if value="{{ showRecheck }}"><button class="{{ recheckCls }}"><i class="fa-solid fa-rotate"></i>再確認</button><span class="fine">再確認は 1 分に 1 回、1 日 20 回までです。</span></sc-if>
               <sc-if value="{{ showConnect }}"><button class="{{ connectCls }}"><i class="fa-brands fa-youtube"></i>{{ connectText }}</button></sc-if>
               <sc-if value="{{ showDisconnect }}"><button class="{{ opCls }}">接続を解除</button></sc-if>
             </div>
+            <sc-if value="{{ showDisconnect }}">
+              <p class="fine">接続を解除すると、未清算の配信の清算を試みたうえで、Google 側で権限を失効させ、保存した情報を削除します。YouTube 側のストリームは削除しません。</p>
+            </sc-if>
+            <p class="{{ channelNoteCls }}">チャンネル名は、この画面に表示するためだけに取得します。最長 10 分間メモリに保持し、保存しません。</p>
+            <p class="fine">YouTube の権限は、Google のセキュリティ設定からも取り消せます。<a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" style="color:var(--teal)">Google アカウントの権限の管理 <i class="fa-solid fa-arrow-up-right-from-square"></i></a></p>
           </div>
           <div class="card danger">
             <div class="eb" style="color:var(--live)">Danger Zone</div>
@@ -87,7 +103,7 @@
           </div>
           <div class="acts"><button class="btn"><i class="fa-solid fa-right-from-bracket"></i>ログアウト</button></div>
         </main>
-        <footer class="foot"><a href="#">利用規約</a><a href="#">プライバシーポリシー</a></footer>
+        <footer class="foot"><a href="Terms.dc.html">利用規約</a><a href="Privacy.dc.html">プライバシーポリシー</a></footer>
       </div>
     </x-dc>
     <script type="text/x-dc" data-dc-script data-props='{
@@ -97,25 +113,44 @@
         renderVals() {
           const s = (this.state && this.state.s) || 'ok';
           const go = (k) => () => this.setState({ s: k });
-          const defs = [['ok','接続済み'],['none','未接続'],['nolive','ライブ未有効'],['revoked','認可失効'],['busy','配信中']];
+          const defs = [['ok','接続済み'],['none','未接続'],['nolive','ライブ未有効'],['revoked','認可失効'],['busy','配信中'],['denied','不成立：権限の拒否'],['notoken','不成立：更新トークンなし'],['nochannel','不成立：チャンネルなし'],['unknown','不成立：確認不能']];
           const tabs = defs.map(([k, l]) => ({ label: l, cls: s === k ? 'tab on' : 'tab', go: go(k) }));
+          const connected = { cls: 'chip ok', icon: 'fa-solid fa-check', text: '接続済み', guide: 'チャンネルがあり、ライブ配信が有効です。配信を開始できます。' };
+          const notConnected = { cls: 'chip', icon: 'fa-regular fa-circle', text: '未接続', guide: 'YouTube を接続すると、配信できます。' };
           const map = {
-            ok: { cls: 'chip ok', icon: 'fa-solid fa-check', text: '接続済み', guide: 'チャンネルがあり、ライブ配信が有効です。配信を開始できます。' },
-            none: { cls: 'chip', icon: 'fa-regular fa-circle', text: '未接続', guide: 'YouTube を接続すると、配信できます。チャンネルがない場合は、YouTube でチャンネルを作成してください。' },
+            ok: connected,
+            none: Object.assign({}, notConnected, { guide: 'YouTube を接続すると、配信できます。チャンネルがない場合は、YouTube でチャンネルを作成してください。' }),
             nolive: { cls: 'chip warn', icon: 'fa-solid fa-triangle-exclamation', text: 'ライブ未有効', guide: 'YouTube 側でライブ配信を有効にしてください。有効になるまでに時間がかかる場合があります。有効にしたら「再確認」を押してください。' },
             revoked: { cls: 'chip bad', icon: 'fa-solid fa-circle-xmark', text: '認可失効', guide: 'YouTube への許可が取り消されたか、失効しています。もう一度接続してください。' },
-            busy: { cls: 'chip ok', icon: 'fa-solid fa-check', text: '接続済み', guide: 'チャンネルがあり、ライブ配信が有効です。' }
+            busy: Object.assign({}, connected, { guide: 'チャンネルがあり、ライブ配信が有効です。' }),
+            denied: notConnected,
+            notoken: notConnected,
+            nochannel: notConnected,
+            unknown: connected
           }[s];
+          const notices = {
+            denied: ['banner bad', 'fa-solid fa-circle-xmark', '接続できませんでした。', 'YouTube の権限が付与されませんでした。配信の作成・確認・終了のために、YouTube の権限が必要です。権限を外さずに、もう一度接続してください。'],
+            notoken: ['banner bad', 'fa-solid fa-circle-xmark', '接続できませんでした。', 'YouTube の許可を確認できませんでした。もう一度接続してください。'],
+            nochannel: ['banner', 'fa-solid fa-triangle-exclamation', '接続できませんでした。', 'YouTube のチャンネルが見つかりませんでした。YouTube でチャンネルを作成してから、もう一度接続してください。'],
+            unknown: ['banner', 'fa-solid fa-triangle-exclamation', '確認できませんでした。', '時間を置いて、もう一度お試しください。接続の状態は変わっていません。']
+          };
+          const notice = notices[s] || null;
           const busy = s === 'busy';
           const off = busy ? 'btn dis' : 'btn';
+          const hasChannel = s === 'ok' || s === 'nolive' || s === 'busy' || s === 'unknown';
           return {
             tabs, isBusy: busy,
+            showNotice: !!notice,
+            noticeCls: notice ? notice[0] : 'banner off', noticeIcon: notice ? notice[1] : '', noticeTitle: notice ? notice[2] : '', noticeBody: notice ? notice[3] : '',
             chipCls: map.cls, chipIcon: map.icon, chipText: map.text, guide: map.guide,
-            showRecheck: s === 'ok' || s === 'nolive' || s === 'busy',
-            showConnect: s === 'none' || s === 'revoked' || s === 'nolive' || s === 'ok' || s === 'busy',
-            connectText: s === 'none' ? 'YouTube を接続' : '再接続',
-            connectCls: s === 'none' || s === 'revoked' ? 'btn pri' : off,
-            showDisconnect: s !== 'none',
+            channelCls: hasChannel ? 'kv' : 'kv off', channelName: 'サンプルチャンネル',
+            channelNoteCls: hasChannel ? 'fine' : 'fine off',
+            showRecheck: s === 'ok' || s === 'nolive' || s === 'busy' || s === 'unknown',
+            recheckCls: busy ? 'btn dis' : 'btn',
+            showConnect: s !== 'unknown',
+            connectText: (s === 'none' || s === 'denied' || s === 'notoken' || s === 'nochannel') ? 'YouTube を接続' : '再接続',
+            connectCls: (s === 'none' || s === 'revoked' || s === 'denied' || s === 'notoken' || s === 'nochannel') ? 'btn pri' : off,
+            showDisconnect: hasChannel || s === 'revoked',
             opCls: off,
             delCls: busy ? 'btn dis' : 'btn stop'
           };

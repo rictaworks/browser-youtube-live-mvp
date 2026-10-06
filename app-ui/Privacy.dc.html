@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="./support.js"></script>
+  </head>
+  <body>
+    <x-dc>
+      <helmet data-dc-atomics>
+        <link rel="stylesheet" href="styles.css">
+        <style>
+          body{background:var(--bg);color:var(--white);font-family:var(--font-sans);font-size:14px;line-height:1.5}
+          a{color:var(--silver);text-decoration:none}
+          a:hover{color:var(--teal)}
+          a:focus-visible{outline:2px solid var(--white);outline-offset:3px}
+          i{font-style:normal}
+          .mock{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 40px;background:var(--bg-footer);border-bottom:1px dashed var(--silver-30);font-size:12px;color:var(--silver-70)}
+          .mock .tag{font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.15em;margin-right:6px}
+          .top{display:flex;align-items:center;justify-content:space-between;padding:18px 40px}
+          .wm{font:600 15px var(--font-sans);letter-spacing:.08em;color:var(--white)}
+          .wm b{color:var(--teal);font-weight:600}
+          .nav{display:flex;gap:28px;align-items:center}
+          .nav a{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--silver-70)}
+          .nav a.on{color:var(--teal);text-shadow:var(--text-glow-step)}
+          .page{width:100%;max-width:860px;margin:0 auto;padding:16px 40px 60px;display:flex;flex-direction:column;gap:20px}
+          .h1{font:700 40px/1.1 var(--font-display)}
+          .sub{color:var(--silver-70);font-size:13px;margin-left:16px}
+          .eb{font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:var(--section-label);display:flex;gap:10px;align-items:center}
+          .eb::after{content:"";flex:1;height:1px;background:var(--silver-10)}
+          .card{border:1px solid var(--border);background:var(--card-bg);padding:22px 26px;display:flex;flex-direction:column;gap:12px}
+          .row{display:flex;justify-content:space-between;gap:24px;padding:10px 0;border-bottom:1px solid var(--silver-08);font-size:14px}
+          .row:last-child{border-bottom:0}
+          .row span:first-child{color:var(--silver-70);flex:none;max-width:40%}
+          .row b{font-weight:500;color:var(--white);text-align:right}
+          .note{font-size:14px;color:var(--silver);line-height:1.9}
+          .foot{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;padding:28px 40px;background:var(--bg-footer);border-top:1px solid var(--silver-08);font-size:12px;letter-spacing:.2em;text-transform:uppercase;margin-top:auto}
+          @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+          @media (max-width:767px){.page{padding:16px 20px 40px}.top,.mock{padding-left:20px;padding-right:20px}.row{flex-direction:column;gap:4px}.row span:first-child{max-width:none}.row b{text-align:left}}
+        </style>
+      </helmet>
+      <div data-screen-label="Privacy" style="min-height:100vh;background:var(--bg);display:flex;flex-direction:column">
+        <div class="mock"><span class="tag">MOCK</span>本文は、requirements.md の記載を並べた仮置きです。公開用の文章は Gemini が執筆します。</div>
+        <header class="top">
+          <a class="wm" href="Landing.dc.html">Browser <b>Live</b></a>
+          <nav class="nav"><a href="Terms.dc.html">利用規約</a><a class="on" href="Privacy.dc.html">プライバシーポリシー</a></nav>
+        </header>
+        <main class="page">
+          <div><span class="h1">Privacy</span><span class="sub">プライバシーポリシー</span></div>
+          <div class="card">
+            <div class="eb">Collected</div>
+            <div class="row"><span>Google の利用者識別子</span><b>不透明な識別子として保持します</b></div>
+            <div class="row"><span>更新トークン</span><b>暗号化して保存します。画面・中継・記録・管理画面へは出力しません</b></div>
+            <div class="row"><span>チャンネル名</span><b>アカウント画面に表示するために取得し、最長 10 分間メモリに保持します。保存しません</b></div>
+            <div class="row"><span>タイトル</span><b>YouTube の配信識別子を保存するとき、または配信が終了するときまで保持します</b></div>
+            <div class="row"><span>YouTube の配信識別子</span><b>清算と利用者への案内のために保持し、終了から 30 日で消去します</b></div>
+            <div class="row"><span>IP アドレス</span><b>頻度制限の計数にだけ使います。測定の記録・配信の記録へは残しません</b></div>
+            <div class="row"><span>映像・音声</span><b>保存しません。中継のメモリ上を通過するだけです</b></div>
+          </div>
+          <div class="card">
+            <div class="eb">Not Collected</div>
+            <div class="row"><span>メールアドレス</span><b>取得しません</b></div>
+            <div class="row"><span>氏名・表示名・プロフィール画像</span><b>取得しません</b></div>
+            <div class="row"><span>生年月日・住所・電話番号</span><b>使用しません</b></div>
+          </div>
+          <div class="card">
+            <div class="eb">Purpose</div>
+            <div class="row"><span>ログイン</span><b>利用者の識別。要求する権限は識別のみです</b></div>
+            <div class="row"><span>YouTube の権限</span><b>利用者が同意した目的（自分のチャンネルでのライブ配信の作成・確認・終了・清算）に限って使います</b></div>
+            <div class="row"><span>利用状況の測定</span><b>内部のアカウント識別子にだけ紐づけます。氏名・メールアドレス・チャンネル名・タイトル・IP アドレスは含めません</b></div>
+          </div>
+          <div class="card">
+            <div class="eb">Retention</div>
+            <div class="row"><span>健全性の標本・配信の出来事</span><b>30 日で削除します</b></div>
+            <div class="row"><span>接続チケット</span><b>失効から 1 日で削除します</b></div>
+            <div class="row"><span>セッション</span><b>最終利用から 30 日で失効させます</b></div>
+            <div class="row"><span>更新トークン</span><b>接続の解除・アカウントの削除・再接続による置き換えまで</b></div>
+            <div class="row"><span>ストリームの識別子</span><b>最後の確認から 30 日を過ぎたものを消去します</b></div>
+          </div>
+          <div class="card">
+            <div class="eb">YouTube API Services</div>
+            <p class="note">本サービスは、YouTube API サービスを利用しています。</p>
+            <p class="note"><a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" style="color:var(--teal)">Google プライバシーポリシー <i class="fa-solid fa-arrow-up-right-from-square"></i></a></p>
+            <p class="note">YouTube の権限は、Google のセキュリティ設定から、いつでも取り消せます。</p>
+            <p class="note"><a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener noreferrer" style="color:var(--teal)">Google アカウントの権限の管理 <i class="fa-solid fa-arrow-up-right-from-square"></i></a></p>
+          </div>
+          <div class="card">
+            <div class="eb">Deletion</div>
+            <div class="row"><span>接続の解除</span><b>アカウント画面から、利用者ご自身で行えます</b></div>
+            <div class="row"><span>アカウントの削除</span><b>アカウント画面から、利用者ご自身で行えます。要求の受理と同時に、紐づく全ての記録を削除します</b></div>
+            <div class="row"><span>削除の要求</span><b>7 日以内に応じます</b></div>
+          </div>
+          <div class="card">
+            <div class="eb">Contact</div>
+            <div class="row"><span>運営</span><b>Ricta Works</b></div>
+            <div class="row"><span>連絡先</span><b>info@rictaworks.jp</b></div>
+            <div class="row"><span>施行日</span><b>未定</b></div>
+          </div>
+        </main>
+        <footer class="foot"><a href="Terms.dc.html">利用規約</a><a href="Privacy.dc.html">プライバシーポリシー</a></footer>
+      </div>
+    </x-dc>
+    <script type="text/x-dc" data-dc-script data-props='{
+  "$preview": { "width": 1440, "height": 900 }
+}'>
+      class Component extends DCLogic {
+        renderVals() { return {}; }
+      }
+    </script>
+  </body>
+</html>
