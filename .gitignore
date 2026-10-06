@@ -1,0 +1,79 @@
+# --- Secrets（最優先・コミット事故の再発防止） ---
+.env
+.env.*
+!.env.example
+config/master.key
+**/config/master.key
+**/config/credentials/*.key
+*.pem
+*.key
+!*.pub.key
+
+# --- .claude/ の扱いはリポジトリの公開設定で決める ---
+# PUBLICリポジトリ：以下を有効化し、.claude/を丸ごと除外する（社内ノウハウの公開防止。questboardで実施済み）
+.claude/*
+#
+# PRIVATEリポジトリ：上の行をコメントアウトし、.claude/を丸ごとコミットする
+# （露出リスクが無く、クローン直後からsettings.json・agents・workflowsが動く。x-follower-gateで実施済み）
+
+# --- ノウハウ・非公開ディレクトリ（公開/非公開に関わらず常に除外） ---
+CLIENT/
+DEBUG/
+TASKS/
+WORK/
+DELETE/
+ENV/
+
+# --- Rails ---
+/log/*
+/tmp/*
+!/log/.keep
+!/tmp/.keep
+.byebug_history
+/public/assets
+
+# --- Node / Next.js / Vercel ---
+node_modules/
+.next/
+out/
+.vercel
+
+# --- Python / FastAPI ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- Go ---
+/bin/
+
+# --- Rust / Tauri ---
+target/
+src-tauri/target/
+
+# --- Unity ---
+/Library/
+/Temp/
+/Obj/
+/Build/
+/Logs/
+/UserSettings/
+/MemoryCaptures/
+*.csproj
+*.sln
+
+# --- Playwright ---
+test-results/
+playwright-report/
+/.playwright-mcp/
+
+# --- エディタ・OS ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*Zone.Identifier
+
+# --- テスト・カバレッジ ---
+coverage/
+.rspec_status
