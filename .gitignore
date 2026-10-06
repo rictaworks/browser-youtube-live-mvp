@@ -31,6 +31,14 @@ ENV/
 !/tmp/.keep
 .byebug_history
 /public/assets
+# Rails は src/backend/ の内側に置く（requirements.md 2.6）ため、同じ除外を内側にも適用する
+/src/backend/log/*
+/src/backend/tmp/*
+/src/backend/storage/*
+!/src/backend/log/.keep
+!/src/backend/tmp/.keep
+!/src/backend/storage/.keep
+/src/backend/public/assets
 
 # --- Node / Next.js / Vercel ---
 node_modules/
@@ -46,6 +54,7 @@ venv/
 
 # --- Go ---
 /bin/
+/src/relay/bin/
 
 # --- Rust / Tauri ---
 target/
