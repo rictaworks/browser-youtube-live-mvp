@@ -13,7 +13,7 @@
 | 中継 | Gin（Go 1.27） | `src/relay/` | 3002 |
 | DB | PostgreSQL 17 | docker compose の `db`（backend だけが接続します。ホストへ公開しません） | なし |
 
-`src/contracts/` は、3 層の契約の置き場です（現在は空です）。すべてのコンテナへ `/contracts` として、読み取り専用でマウントします。
+`src/contracts/` は、3 層の契約（列挙・制限値・HTTP API・内部通信・WebSocket の転送プロトコル・共有のテストベクタ）の置き場です。すべてのコンテナへ `/contracts` として、読み取り専用でマウントします。各層は、実行時には `src/contracts/` を読まず、自分の定数モジュール（`src/backend/app/domain/contract/`・`src/frontend/core/contract/`・`src/relay/core/contract/`）を持ち、テストで契約との一致を確かめます。
 
 ## 開発環境の起動
 
@@ -57,7 +57,8 @@ COMPOSE_PROJECT_NAME=bl-other FRONTEND_PORT=13000 BACKEND_PORT=13001 RELAY_PORT=
 必要なサービスは、各スクリプトが起動します。どれも、緑なら終了コード 0、赤なら 0 以外を返します。
 
 ```bash
-scripts/test_all.sh        # すべて（scripts のテストと、下の 3 層）
+scripts/test_all.sh        # すべて（scripts のテストと、契約・下の 3 層）
+scripts/test_contracts.sh  # 契約（src/contracts）のテスト（Node の node --test）
 scripts/test_backend.sh    # RSpec の全件・RuboCop（omakase）・Brakeman・bundler-audit
 scripts/test_frontend.sh   # ESLint・tsc --noEmit・Jest
 scripts/test_relay.sh      # gofmt の差分なし・go vet・go test

@@ -1,0 +1,627 @@
+{
+  "$comment": "WebSocket 転送フレームの共有テストベクタ（ws-protocol.md）。フロントエンド（#25）と中継（#18）のコーデックは、このベクタをそのまま通す。valid は、方向の受信側が decoded のとおりに復号でき（反対側の受信側は wrong_direction で拒否する）、decoded の欄からエンコードした結果が hex と一致する有効なフレーム。decode_only が true のものは、復号だけを検査する（エンコーダは作らない形）。timestamp_us は、JSON の数値が 2^53 を超えると JavaScript で厳密に表せないため、10 進数の文字列。invalid は、receivers に挙げた受信側（relay・browser）が、error のエラー符号で拒否するフレーム。検証の順は ws-protocol.md の「検証の順」のとおり。2 MB 超は、本文を巨大にせず、ヘッダの本文長の欄（17 + 本文長 > 2,097,152）だけで表す。body_text は、本文を UTF-8 として読んだ内容（読みやすさのための写しで、コーデックは使わない）。",
+  "valid": [
+    {
+      "name": "hello_ticket",
+      "direction": "browser_to_relay",
+      "note": "接続通知。本文は UTF-8 の接続チケット（URL 安全な文字）。制御メッセージの時刻は 0",
+      "hex": "424c01010000000000000000000000003164756d6d792d7469636b65742d303132333435363738396162636465666768696a6b6c6d6e6f707172737475767778797a",
+      "decoded": {"type": "hello", "type_code": 1, "keyframe": false, "timestamp_us": "0", "body_hex": "64756d6d792d7469636b65742d303132333435363738396162636465666768696a6b6c6d6e6f707172737475767778797a"},
+      "body_text": "dummy-ticket-0123456789abcdefghijklmnopqrstuvwxyz"
+    },
+    {
+      "name": "probe_16_bytes",
+      "direction": "browser_to_relay",
+      "note": "計測データ。本文は任意のバイト列（実際は 32 KB 程度。ベクタは短くしている）",
+      "hex": "424c0102000000000000000000000000100b30557a9fc4e90e33587da2c7ec1136",
+      "decoded": {"type": "probe", "type_code": 2, "keyframe": false, "timestamp_us": "0", "body_hex": "0b30557a9fc4e90e33587da2c7ec1136"}
+    },
+    {
+      "name": "start_720p",
+      "direction": "browser_to_relay",
+      "note": "開始通知（標準 720p）。description_b64 は復号器設定（AVCDecoderConfigurationRecord・AudioSpecificConfig）の base64",
+      "hex": "424c0103000000000000000000000001177b2270726f66696c65223a2237323070222c22766964656f223a7b22636f646563223a22617663312e344434303146222c227769647468223a313238302c22686569676874223a3732302c226672616d6572617465223a33302c22626974726174655f6b627073223a343530302c226465736372697074696f6e5f623634223a2241553141482f2f684141396e545541666c6c5146416532416f454138496845424141526f376a7941227d2c22617564696f223a7b22636f646563223a226d7034612e34302e32222c2273616d706c655f72617465223a34343130302c226368616e6e656c73223a322c22626974726174655f6b627073223a3132382c226465736372697074696f6e5f623634223a224568413d227d7d",
+      "decoded": {"type": "start", "type_code": 3, "keyframe": false, "timestamp_us": "0", "body_hex": "7b2270726f66696c65223a2237323070222c22766964656f223a7b22636f646563223a22617663312e344434303146222c227769647468223a313238302c22686569676874223a3732302c226672616d6572617465223a33302c22626974726174655f6b627073223a343530302c226465736372697074696f6e5f623634223a2241553141482f2f684141396e545541666c6c5146416532416f454138496845424141526f376a7941227d2c22617564696f223a7b22636f646563223a226d7034612e34302e32222c2273616d706c655f72617465223a34343130302c226368616e6e656c73223a322c22626974726174655f6b627073223a3132382c226465736372697074696f6e5f623634223a224568413d227d7d"},
+      "body_text": "{\"profile\":\"720p\",\"video\":{\"codec\":\"avc1.4D401F\",\"width\":1280,\"height\":720,\"framerate\":30,\"bitrate_kbps\":4500,\"description_b64\":\"AU1AH//hAA9nTUAfllQFAe2AoEA8IhEBAARo7jyA\"},\"audio\":{\"codec\":\"mp4a.40.2\",\"sample_rate\":44100,\"channels\":2,\"bitrate_kbps\":128,\"description_b64\":\"EhA=\"}}"
+    },
+    {
+      "name": "start_480p_constrained_baseline",
+      "direction": "browser_to_relay",
+      "note": "開始通知（軽量 480p。Main が使えない環境の Constrained Baseline）",
+      "hex": "424c01030000000000000000000000011a7b2270726f66696c65223a2234383070222c22766964656f223a7b22636f646563223a22617663312e343245303146222c227769647468223a3835342c22686569676874223a3438302c226672616d6572617465223a33302c22626974726174655f6b627073223a313530302c226465736372697074696f6e5f623634223a2241553141482f2f684142426e545541666c6c5144416636416f4541384968476f41514145614f343867413d3d227d2c22617564696f223a7b22636f646563223a226d7034612e34302e32222c2273616d706c655f72617465223a34343130302c226368616e6e656c73223a322c22626974726174655f6b627073223a3132382c226465736372697074696f6e5f623634223a224568413d227d7d",
+      "decoded": {"type": "start", "type_code": 3, "keyframe": false, "timestamp_us": "0", "body_hex": "7b2270726f66696c65223a2234383070222c22766964656f223a7b22636f646563223a22617663312e343245303146222c227769647468223a3835342c22686569676874223a3438302c226672616d6572617465223a33302c22626974726174655f6b627073223a313530302c226465736372697074696f6e5f623634223a2241553141482f2f684142426e545541666c6c5144416636416f4541384968476f41514145614f343867413d3d227d2c22617564696f223a7b22636f646563223a226d7034612e34302e32222c2273616d706c655f72617465223a34343130302c226368616e6e656c73223a322c22626974726174655f6b627073223a3132382c226465736372697074696f6e5f623634223a224568413d227d7d"},
+      "body_text": "{\"profile\":\"480p\",\"video\":{\"codec\":\"avc1.42E01F\",\"width\":854,\"height\":480,\"framerate\":30,\"bitrate_kbps\":1500,\"description_b64\":\"AU1AH//hABBnTUAfllQDAf6AoEA8IhGoAQAEaO48gA==\"},\"audio\":{\"codec\":\"mp4a.40.2\",\"sample_rate\":44100,\"channels\":2,\"bitrate_kbps\":128,\"description_b64\":\"EhA=\"}}"
+    },
+    {
+      "name": "video_keyframe_frame_0",
+      "direction": "browser_to_relay",
+      "note": "映像。フレーム 0 のキーフレーム（属性 bit0 = 1）。時刻 = フレーム番号 × 1,000,000 ÷ 30 = 0。本文は AVCC（4 バイトの長さ + NAL）",
+      "hex": "424c01040100000000000000000000000a000000066588840033ff",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": true, "timestamp_us": "0", "body_hex": "000000066588840033ff"}
+    },
+    {
+      "name": "video_delta_frame_1",
+      "direction": "browser_to_relay",
+      "note": "映像。フレーム 1 の差分（属性 0）。1,000,000 ÷ 30 = 33,333.33 を丸めて 33,333",
+      "hex": "424c01040000000000000082350000000900000005419a246c41",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": false, "timestamp_us": "33333", "body_hex": "00000005419a246c41"}
+    },
+    {
+      "name": "video_delta_frame_2",
+      "direction": "browser_to_relay",
+      "note": "映像。フレーム 2。2,000,000 ÷ 30 = 66,666.67 を丸めて 66,667",
+      "hex": "424c010400000000000001046b0000000900000005419a266c42",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": false, "timestamp_us": "66667", "body_hex": "00000005419a266c42"}
+    },
+    {
+      "name": "video_delta_frame_30",
+      "direction": "browser_to_relay",
+      "note": "映像。フレーム 30（1 秒）",
+      "hex": "424c01040000000000000f42400000000800000004419a286d",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": false, "timestamp_us": "1000000", "body_hex": "00000004419a286d"}
+    },
+    {
+      "name": "video_keyframe_frame_60",
+      "direction": "browser_to_relay",
+      "note": "映像。フレーム 60（2 秒）のキーフレーム。キーフレーム間隔は 2 秒",
+      "hex": "424c01040100000000001e8480000000100000000c65888421a000112233445566",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": true, "timestamp_us": "2000000", "body_hex": "0000000c65888421a000112233445566"}
+    },
+    {
+      "name": "audio_first_frame",
+      "direction": "browser_to_relay",
+      "note": "音声。累積 0 サンプルの AAC の生フレーム（ADTS なし）。時刻 = 累積サンプル数 × 1,000,000 ÷ 44,100",
+      "hex": "424c010500000000000000000000000008211a145a04667c88",
+      "decoded": {"type": "audio", "type_code": 5, "keyframe": false, "timestamp_us": "0", "body_hex": "211a145a04667c88"}
+    },
+    {
+      "name": "audio_cumulative_1024_samples",
+      "direction": "browser_to_relay",
+      "note": "音声。累積 1,024 サンプル。1,024 × 1,000,000 ÷ 44,100 = 23,219.95 を丸めて 23,220",
+      "hex": "424c0105000000000000005ab400000008211a1c5b12d07e55",
+      "decoded": {"type": "audio", "type_code": 5, "keyframe": false, "timestamp_us": "23220", "body_hex": "211a1c5b12d07e55"}
+    },
+    {
+      "name": "audio_cumulative_441000_samples",
+      "direction": "browser_to_relay",
+      "note": "音声。累積 441,000 サンプル = ちょうど 10 秒",
+      "hex": "424c010500000000000098968000000008211a1e5b13a17f09",
+      "decoded": {"type": "audio", "type_code": 5, "keyframe": false, "timestamp_us": "10000000", "body_hex": "211a1e5b13a17f09"}
+    },
+    {
+      "name": "audio_timestamp_2_pow_32_minus_1",
+      "direction": "browser_to_relay",
+      "note": "時刻の境界。2^32 - 1",
+      "hex": "424c01050000000000ffffffff000000022100",
+      "decoded": {"type": "audio", "type_code": 5, "keyframe": false, "timestamp_us": "4294967295", "body_hex": "2100"}
+    },
+    {
+      "name": "video_timestamp_2_pow_32",
+      "direction": "browser_to_relay",
+      "note": "時刻の境界。2^32（32 ビットに収まらない最小の値）",
+      "hex": "424c01040000000001000000000000000600000002419a",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": false, "timestamp_us": "4294967296", "body_hex": "00000002419a"}
+    },
+    {
+      "name": "audio_timestamp_2_pow_53_minus_1",
+      "direction": "browser_to_relay",
+      "note": "時刻の境界。2^53 - 1（JavaScript の Number で厳密に表せる最大の整数）",
+      "hex": "424c010500001fffffffffffff000000022100",
+      "decoded": {"type": "audio", "type_code": 5, "keyframe": false, "timestamp_us": "9007199254740991", "body_hex": "2100"}
+    },
+    {
+      "name": "video_timestamp_2_pow_53",
+      "direction": "browser_to_relay",
+      "note": "時刻の境界。2^53（JavaScript の Number では 2^53 + 1 と区別できない最初の値）",
+      "hex": "424c01040100200000000000000000000a000000066588840033ff",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": true, "timestamp_us": "9007199254740992", "body_hex": "000000066588840033ff"}
+    },
+    {
+      "name": "audio_timestamp_2_pow_53_plus_1",
+      "direction": "browser_to_relay",
+      "note": "時刻の境界。2^53 + 1（Number に変換すると失われる値）",
+      "hex": "424c0105000020000000000001000000022100",
+      "decoded": {"type": "audio", "type_code": 5, "keyframe": false, "timestamp_us": "9007199254740993", "body_hex": "2100"}
+    },
+    {
+      "name": "video_timestamp_2_pow_63",
+      "direction": "browser_to_relay",
+      "note": "時刻の境界。2^63（符号付き 64 ビットに収まらない最小の値）",
+      "hex": "424c01040080000000000000000000000600000002419a",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": false, "timestamp_us": "9223372036854775808", "body_hex": "00000002419a"}
+    },
+    {
+      "name": "audio_timestamp_max_uint64",
+      "direction": "browser_to_relay",
+      "note": "時刻の境界。2^64 - 1（符号なし 64 ビットの最大。ヘッダの時刻の欄がすべて 0xFF）",
+      "hex": "424c010500ffffffffffffffff000000022100",
+      "decoded": {"type": "audio", "type_code": 5, "keyframe": false, "timestamp_us": "18446744073709551615", "body_hex": "2100"}
+    },
+    {
+      "name": "video_reserved_attribute_bits_ignored_keyframe",
+      "direction": "browser_to_relay",
+      "note": "属性の予約ビット（bit1〜bit7）は無視する。bit0 = 1 なのでキーフレーム。送信側は予約ビットを 0 にするため、エンコーダはこの形を作らない（復号だけを検査する）",
+      "decode_only": true,
+      "hex": "424c0104ff00000000000000000000000a000000066588840033ff",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": true, "timestamp_us": "0", "body_hex": "000000066588840033ff"}
+    },
+    {
+      "name": "video_reserved_attribute_bits_ignored_delta",
+      "direction": "browser_to_relay",
+      "note": "属性の予約ビットを無視する。bit0 = 0 なので、他のビットが立っていてもキーフレームではない（復号だけを検査する）",
+      "decode_only": true,
+      "hex": "424c0104fe00000000000082350000000900000005419a246c41",
+      "decoded": {"type": "video", "type_code": 4, "keyframe": false, "timestamp_us": "33333", "body_hex": "00000005419a246c41"}
+    },
+    {
+      "name": "report_live",
+      "direction": "browser_to_relay",
+      "note": "状態報告（1 秒間隔）。出来事なし",
+      "hex": "424c0106000000000000000000000000597b226261636b6c6f675f6d73223a3132302c2264726f707065645f766964656f5f6672616d6573223a302c227461726765745f6b627073223a343530302c227374617465223a226c697665222c226576656e7473223a5b5d7d",
+      "decoded": {"type": "report", "type_code": 6, "keyframe": false, "timestamp_us": "0", "body_hex": "7b226261636b6c6f675f6d73223a3132302c2264726f707065645f766964656f5f6672616d6573223a302c227461726765745f6b627073223a343530302c227374617465223a226c697665222c226576656e7473223a5b5d7d"},
+      "body_text": "{\"backlog_ms\":120,\"dropped_video_frames\":0,\"target_kbps\":4500,\"state\":\"live\",\"events\":[]}"
+    },
+    {
+      "name": "report_degraded_with_events",
+      "direction": "browser_to_relay",
+      "note": "状態報告。ブラウザ側の出来事（detail は符号と数値のみ。省略できる）",
+      "hex": "424c0106000000000000000000000000ed7b226261636b6c6f675f6d73223a313830302c2264726f707065645f766964656f5f6672616d6573223a31322c227461726765745f6b627073223a333030302c227374617465223a226465677261646564222c226576656e7473223a5b7b226b696e64223a22626974726174655f646f776e222c2264657461696c223a7b2266726f6d5f6b627073223a333330302c22746f5f6b627073223a333030307d7d2c7b226b696e64223a22766964656f5f64726f70706564222c2264657461696c223a7b226672616d6573223a31327d7d2c7b226b696e64223a2264656772616465645f73746172746564227d5d7d",
+      "decoded": {"type": "report", "type_code": 6, "keyframe": false, "timestamp_us": "0", "body_hex": "7b226261636b6c6f675f6d73223a313830302c2264726f707065645f766964656f5f6672616d6573223a31322c227461726765745f6b627073223a333030302c227374617465223a226465677261646564222c226576656e7473223a5b7b226b696e64223a22626974726174655f646f776e222c2264657461696c223a7b2266726f6d5f6b627073223a333330302c22746f5f6b627073223a333030307d7d2c7b226b696e64223a22766964656f5f64726f70706564222c2264657461696c223a7b226672616d6573223a31327d7d2c7b226b696e64223a2264656772616465645f73746172746564227d5d7d"},
+      "body_text": "{\"backlog_ms\":1800,\"dropped_video_frames\":12,\"target_kbps\":3000,\"state\":\"degraded\",\"events\":[{\"kind\":\"bitrate_down\",\"detail\":{\"from_kbps\":3300,\"to_kbps\":3000}},{\"kind\":\"video_dropped\",\"detail\":{\"frames\":12}},{\"kind\":\"degraded_started\"}]}"
+    },
+    {
+      "name": "report_source_events",
+      "direction": "browser_to_relay",
+      "note": "状態報告。ソースの喪失と代替の切替",
+      "hex": "424c0106000000000000000000000000ca7b226261636b6c6f675f6d73223a34302c2264726f707065645f766964656f5f6672616d6573223a302c227461726765745f6b627073223a343530302c227374617465223a226c697665222c226576656e7473223a5b7b226b696e64223a22736f757263655f6c6f7374222c2264657461696c223a7b22736f75726365223a2263616d657261227d7d2c7b226b696e64223a2266616c6c6261636b5f7377697463686564222c2264657461696c223a7b226c61796f7574223a2273637265656e5f6f6e6c79227d7d5d7d",
+      "decoded": {"type": "report", "type_code": 6, "keyframe": false, "timestamp_us": "0", "body_hex": "7b226261636b6c6f675f6d73223a34302c2264726f707065645f766964656f5f6672616d6573223a302c227461726765745f6b627073223a343530302c227374617465223a226c697665222c226576656e7473223a5b7b226b696e64223a22736f757263655f6c6f7374222c2264657461696c223a7b22736f75726365223a2263616d657261227d7d2c7b226b696e64223a2266616c6c6261636b5f7377697463686564222c2264657461696c223a7b226c61796f7574223a2273637265656e5f6f6e6c79227d7d5d7d"},
+      "body_text": "{\"backlog_ms\":40,\"dropped_video_frames\":0,\"target_kbps\":4500,\"state\":\"live\",\"events\":[{\"kind\":\"source_lost\",\"detail\":{\"source\":\"camera\"}},{\"kind\":\"fallback_switched\",\"detail\":{\"layout\":\"screen_only\"}}]}"
+    },
+    {
+      "name": "report_with_multibyte_text",
+      "direction": "browser_to_relay",
+      "note": "日本語（UTF-8 の多バイト文字）を含む JSON 本文。本文長は文字数ではなくバイト数。実際の通信は ASCII だけで、x_ で始まる未知のキーは受信側が無視する（コーデックの検査のための合成）",
+      "hex": "424c0106000000000000000000000000b27b226261636b6c6f675f6d73223a302c2264726f707065645f766964656f5f6672616d6573223a302c227461726765745f6b627073223a343530302c227374617465223a226c697665222c226576656e7473223a5b5d2c22785f766563746f725f74657874223a22e697a5e69cace8aa9ee381aee38386e382ade382b9e38388efbc885554462d3820e381aee5a49ae38390e382a4e38388e69687e5ad97e38292e590abe38280e69cace69687efbc89227d",
+      "decoded": {"type": "report", "type_code": 6, "keyframe": false, "timestamp_us": "0", "body_hex": "7b226261636b6c6f675f6d73223a302c2264726f707065645f766964656f5f6672616d6573223a302c227461726765745f6b627073223a343530302c227374617465223a226c697665222c226576656e7473223a5b5d2c22785f766563746f725f74657874223a22e697a5e69cace8aa9ee381aee38386e382ade382b9e38388efbc885554462d3820e381aee5a49ae38390e382a4e38388e69687e5ad97e38292e590abe38280e69cace69687efbc89227d"},
+      "body_text": "{\"backlog_ms\":0,\"dropped_video_frames\":0,\"target_kbps\":4500,\"state\":\"live\",\"events\":[],\"x_vector_text\":\"日本語のテキスト（UTF-8 の多バイト文字を含む本文）\"}"
+    },
+    {
+      "name": "end_user_stop",
+      "direction": "browser_to_relay",
+      "note": "終了通知（利用者の停止）",
+      "hex": "424c0107000000000000000000000000167b22726561736f6e223a22757365725f73746f70227d",
+      "decoded": {"type": "end", "type_code": 7, "keyframe": false, "timestamp_us": "0", "body_hex": "7b22726561736f6e223a22757365725f73746f70227d"},
+      "body_text": "{\"reason\":\"user_stop\"}"
+    },
+    {
+      "name": "end_user_cancel",
+      "direction": "browser_to_relay",
+      "note": "終了通知（利用者の取り消し）",
+      "hex": "424c0107000000000000000000000000187b22726561736f6e223a22757365725f63616e63656c227d",
+      "decoded": {"type": "end", "type_code": 7, "keyframe": false, "timestamp_us": "0", "body_hex": "7b22726561736f6e223a22757365725f63616e63656c227d"},
+      "body_text": "{\"reason\":\"user_cancel\"}"
+    },
+    {
+      "name": "end_insufficient_bandwidth",
+      "direction": "browser_to_relay",
+      "note": "終了通知（回線不足）",
+      "hex": "424c0107000000000000000000000000237b22726561736f6e223a22696e73756666696369656e745f62616e647769647468227d",
+      "decoded": {"type": "end", "type_code": 7, "keyframe": false, "timestamp_us": "0", "body_hex": "7b22726561736f6e223a22696e73756666696369656e745f62616e647769647468227d"},
+      "body_text": "{\"reason\":\"insufficient_bandwidth\"}"
+    },
+    {
+      "name": "accepted_first_connection",
+      "direction": "relay_to_browser",
+      "note": "接続受理（初回）。プロファイルは未確定（null）",
+      "hex": "424c0181000000000000000000000000577b227374617465223a227265736572766564222c22726573756d65223a66616c73652c2270726f66696c65223a6e756c6c2c226c696d697473223a7b2274696d655f6c696d69745f7365636f6e6473223a333630307d7d",
+      "decoded": {"type": "accepted", "type_code": 129, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227374617465223a227265736572766564222c22726573756d65223a66616c73652c2270726f66696c65223a6e756c6c2c226c696d697473223a7b2274696d655f6c696d69745f7365636f6e6473223a333630307d7d"},
+      "body_text": "{\"state\":\"reserved\",\"resume\":false,\"profile\":null,\"limits\":{\"time_limit_seconds\":3600}}"
+    },
+    {
+      "name": "accepted_resume",
+      "direction": "relay_to_browser",
+      "note": "接続受理（再開）。確定済みのプロファイルを持つ",
+      "hex": "424c0181000000000000000000000000547b227374617465223a226c697665222c22726573756d65223a747275652c2270726f66696c65223a2237323070222c226c696d697473223a7b2274696d655f6c696d69745f7365636f6e6473223a333630307d7d",
+      "decoded": {"type": "accepted", "type_code": 129, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227374617465223a226c697665222c22726573756d65223a747275652c2270726f66696c65223a2237323070222c226c696d697473223a7b2274696d655f6c696d69745f7365636f6e6473223a333630307d7d"},
+      "body_text": "{\"state\":\"live\",\"resume\":true,\"profile\":\"720p\",\"limits\":{\"time_limit_seconds\":3600}}"
+    },
+    {
+      "name": "probe_result_5200_kbps",
+      "direction": "relay_to_browser",
+      "note": "計測結果。実効スループット（kbps）",
+      "hex": "424c0182000000000000000000000000187b227468726f7567687075745f6b627073223a353230307d",
+      "decoded": {"type": "probe_result", "type_code": 130, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227468726f7567687075745f6b627073223a353230307d"},
+      "body_text": "{\"throughput_kbps\":5200}"
+    },
+    {
+      "name": "ack_video_and_audio",
+      "direction": "relay_to_browser",
+      "note": "受領応答。受領済みの最新メディア時刻（映像・音声それぞれ、マイクロ秒）",
+      "hex": "424c0183000000000000000000000000237b22766964656f5f7573223a33333333332c22617564696f5f7573223a32333232307d",
+      "decoded": {"type": "ack", "type_code": 131, "keyframe": false, "timestamp_us": "0", "body_hex": "7b22766964656f5f7573223a33333333332c22617564696f5f7573223a32333232307d"},
+      "body_text": "{\"video_us\":33333,\"audio_us\":23220}"
+    },
+    {
+      "name": "keyframe_request_empty_body",
+      "direction": "relay_to_browser",
+      "note": "キーフレーム要求。本文長 0（本文が空）",
+      "hex": "424c018400000000000000000000000000",
+      "decoded": {"type": "keyframe_request", "type_code": 132, "keyframe": false, "timestamp_us": "0", "body_hex": ""}
+    },
+    {
+      "name": "throttle_3150_kbps",
+      "direction": "relay_to_browser",
+      "note": "抑制指示。目標ビットレート（kbps）",
+      "hex": "424c0185000000000000000000000000147b227461726765745f6b627073223a333135307d",
+      "decoded": {"type": "throttle", "type_code": 133, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227461726765745f6b627073223a333135307d"},
+      "body_text": "{\"target_kbps\":3150}"
+    },
+    {
+      "name": "status_awaiting_media",
+      "direction": "relay_to_browser",
+      "note": "状態通知（送出待ち）。準備の完了時点で、視聴 URL を伝える",
+      "hex": "424c0186000000000000000000000000977b227374617465223a226177616974696e675f6d65646961222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a6e756c6c7d",
+      "decoded": {"type": "status", "type_code": 134, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227374617465223a226177616974696e675f6d65646961222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a6e756c6c7d"},
+      "body_text": "{\"state\":\"awaiting_media\",\"watch_url\":\"https://www.youtube.com/watch?v=dummyVideoId\",\"warning\":null,\"time_limit_notice_seconds\":null,\"end_reason\":null}"
+    },
+    {
+      "name": "status_confirming",
+      "direction": "relay_to_browser",
+      "note": "状態通知（確定待ち）。ブラウザは、これを受けてから映像・音声を送る",
+      "hex": "424c0186000000000000000000000000937b227374617465223a22636f6e6669726d696e67222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a6e756c6c7d",
+      "decoded": {"type": "status", "type_code": 134, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227374617465223a22636f6e6669726d696e67222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a6e756c6c7d"},
+      "body_text": "{\"state\":\"confirming\",\"watch_url\":\"https://www.youtube.com/watch?v=dummyVideoId\",\"warning\":null,\"time_limit_notice_seconds\":null,\"end_reason\":null}"
+    },
+    {
+      "name": "status_live_with_time_limit_notice",
+      "direction": "relay_to_browser",
+      "note": "状態通知（ライブ）。時間上限の 5 分前の予告（300 秒）",
+      "hex": "424c01860000000000000000000000008c7b227374617465223a226c697665222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a3330302c22656e645f726561736f6e223a6e756c6c7d",
+      "decoded": {"type": "status", "type_code": 134, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227374617465223a226c697665222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a3330302c22656e645f726561736f6e223a6e756c6c7d"},
+      "body_text": "{\"state\":\"live\",\"watch_url\":\"https://www.youtube.com/watch?v=dummyVideoId\",\"warning\":null,\"time_limit_notice_seconds\":300,\"end_reason\":null}"
+    },
+    {
+      "name": "status_live_with_warning",
+      "direction": "relay_to_browser",
+      "note": "状態通知（ライブ）。YouTube のストリームの健全性の警告。配信は継続する",
+      "hex": "424c0186000000000000000000000000a37b227374617465223a226c697665222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a22796f75747562655f73747265616d5f756e6865616c746879222c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a6e756c6c7d",
+      "decoded": {"type": "status", "type_code": 134, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227374617465223a226c697665222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a22796f75747562655f73747265616d5f756e6865616c746879222c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a6e756c6c7d"},
+      "body_text": "{\"state\":\"live\",\"watch_url\":\"https://www.youtube.com/watch?v=dummyVideoId\",\"warning\":\"youtube_stream_unhealthy\",\"time_limit_notice_seconds\":null,\"end_reason\":null}"
+    },
+    {
+      "name": "status_ended_time_limit",
+      "direction": "relay_to_browser",
+      "note": "状態通知（終了）。終了理由を持つ",
+      "hex": "424c0186000000000000000000000000967b227374617465223a22656e646564222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a2274696d655f6c696d6974227d",
+      "decoded": {"type": "status", "type_code": 134, "keyframe": false, "timestamp_us": "0", "body_hex": "7b227374617465223a22656e646564222c2277617463685f75726c223a2268747470733a2f2f7777772e796f75747562652e636f6d2f77617463683f763d64756d6d79566964656f4964222c227761726e696e67223a6e756c6c2c2274696d655f6c696d69745f6e6f746963655f7365636f6e6473223a6e756c6c2c22656e645f726561736f6e223a2274696d655f6c696d6974227d"},
+      "body_text": "{\"state\":\"ended\",\"watch_url\":\"https://www.youtube.com/watch?v=dummyVideoId\",\"warning\":null,\"time_limit_notice_seconds\":null,\"end_reason\":\"time_limit\"}"
+    },
+    {
+      "name": "fatal_message_too_large",
+      "direction": "relay_to_browser",
+      "note": "致命通知。1 メッセージの上限（2,097,152 バイト）を超えた",
+      "hex": "424c01870000000000000000000000001c7b22636f6465223a226d6573736167655f746f6f5f6c61726765227d",
+      "decoded": {"type": "fatal", "type_code": 135, "keyframe": false, "timestamp_us": "0", "body_hex": "7b22636f6465223a226d6573736167655f746f6f5f6c61726765227d"},
+      "body_text": "{\"code\":\"message_too_large\"}"
+    },
+    {
+      "name": "fatal_stale_epoch",
+      "direction": "relay_to_browser",
+      "note": "致命通知。新しい世代の接続に置き換えられた",
+      "hex": "424c0187000000000000000000000000167b22636f6465223a227374616c655f65706f6368227d",
+      "decoded": {"type": "fatal", "type_code": 135, "keyframe": false, "timestamp_us": "0", "body_hex": "7b22636f6465223a227374616c655f65706f6368227d"},
+      "body_text": "{\"code\":\"stale_epoch\"}"
+    },
+    {
+      "name": "fatal_invalid_ticket",
+      "direction": "relay_to_browser",
+      "note": "致命通知。接続チケットが無効（未知・失効・使用済み）",
+      "hex": "424c0187000000000000000000000000197b22636f6465223a22696e76616c69645f7469636b6574227d",
+      "decoded": {"type": "fatal", "type_code": 135, "keyframe": false, "timestamp_us": "0", "body_hex": "7b22636f6465223a22696e76616c69645f7469636b6574227d"},
+      "body_text": "{\"code\":\"invalid_ticket\"}"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "truncated_header_empty",
+      "receivers": ["relay", "browser"],
+      "note": "空のメッセージ",
+      "hex": "",
+      "error": "truncated_header"
+    },
+    {
+      "name": "truncated_header_one_byte",
+      "receivers": ["relay", "browser"],
+      "note": "1 バイト",
+      "hex": "42",
+      "error": "truncated_header"
+    },
+    {
+      "name": "truncated_header_magic_only",
+      "receivers": ["relay", "browser"],
+      "note": "識別子の 2 バイトだけ",
+      "hex": "424c",
+      "error": "truncated_header"
+    },
+    {
+      "name": "truncated_header_16_bytes",
+      "receivers": ["relay", "browser"],
+      "note": "ヘッダの 1 バイト手前（本文長の欄の最後の 1 バイトが無い）",
+      "hex": "424c0104000000000000008235000000",
+      "error": "truncated_header"
+    },
+    {
+      "name": "invalid_magic_first_byte",
+      "receivers": ["relay", "browser"],
+      "note": "識別子の 1 バイト目が違う",
+      "hex": "434c01040000000000000082350000000900000005419a246c41",
+      "error": "invalid_magic"
+    },
+    {
+      "name": "invalid_magic_second_byte",
+      "receivers": ["relay", "browser"],
+      "note": "識別子の 2 バイト目が違う",
+      "hex": "424d01040000000000000082350000000900000005419a246c41",
+      "error": "invalid_magic"
+    },
+    {
+      "name": "invalid_magic_swapped",
+      "receivers": ["relay", "browser"],
+      "note": "識別子の順が逆",
+      "hex": "4c4201040000000000000082350000000900000005419a246c41",
+      "error": "invalid_magic"
+    },
+    {
+      "name": "invalid_magic_all_zero",
+      "receivers": ["relay", "browser"],
+      "note": "ヘッダのすべてが 0",
+      "hex": "0000000000000000000000000000000000",
+      "error": "invalid_magic"
+    },
+    {
+      "name": "unsupported_version_0",
+      "receivers": ["relay", "browser"],
+      "note": "版 0",
+      "hex": "424c00040000000000000082350000000900000005419a246c41",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "unsupported_version_2",
+      "receivers": ["relay", "browser"],
+      "note": "版 2（未来の版）",
+      "hex": "424c02040000000000000082350000000900000005419a246c41",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "unsupported_version_255",
+      "receivers": ["relay", "browser"],
+      "note": "版 255",
+      "hex": "424cff040000000000000082350000000900000005419a246c41",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "unknown_type_0x00",
+      "receivers": ["relay", "browser"],
+      "note": "種別 0x00（定義されていない）",
+      "hex": "424c010000000000000000000000000000",
+      "error": "unknown_type"
+    },
+    {
+      "name": "unknown_type_0x08",
+      "receivers": ["relay", "browser"],
+      "note": "種別 0x08（定義されていない）",
+      "hex": "424c010800000000000000000000000000",
+      "error": "unknown_type"
+    },
+    {
+      "name": "unknown_type_0x80",
+      "receivers": ["relay", "browser"],
+      "note": "種別 0x80（定義されていない）",
+      "hex": "424c018000000000000000000000000000",
+      "error": "unknown_type"
+    },
+    {
+      "name": "unknown_type_0x88",
+      "receivers": ["relay", "browser"],
+      "note": "種別 0x88（定義されていない）",
+      "hex": "424c018800000000000000000000000000",
+      "error": "unknown_type"
+    },
+    {
+      "name": "unknown_type_0xff",
+      "receivers": ["relay", "browser"],
+      "note": "種別 0xFF（定義されていない）",
+      "hex": "424c01ff00000000000000000000000000",
+      "error": "unknown_type"
+    },
+    {
+      "name": "wrong_direction_relay_receives_accepted",
+      "receivers": ["relay"],
+      "note": "中継が、中継 → ブラウザの種別（接続受理）を受けた",
+      "hex": "424c0181000000000000000000000000577b227374617465223a227265736572766564222c22726573756d65223a66616c73652c2270726f66696c65223a6e756c6c2c226c696d697473223a7b2274696d655f6c696d69745f7365636f6e6473223a333630307d7d",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "wrong_direction_relay_receives_keyframe_request",
+      "receivers": ["relay"],
+      "note": "中継が、キーフレーム要求（中継 → ブラウザ）を受けた",
+      "hex": "424c018400000000000000000000000000",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "wrong_direction_relay_receives_fatal",
+      "receivers": ["relay"],
+      "note": "中継が、致命通知を受けた",
+      "hex": "424c0187000000000000000000000000197b22636f6465223a22696e7465726e616c5f6572726f72227d",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "wrong_direction_browser_receives_hello",
+      "receivers": ["browser"],
+      "note": "ブラウザが、ブラウザ → 中継の種別（接続通知）を受けた",
+      "hex": "424c01010000000000000000000000003164756d6d792d7469636b65742d303132333435363738396162636465666768696a6b6c6d6e6f707172737475767778797a",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "wrong_direction_browser_receives_video",
+      "receivers": ["browser"],
+      "note": "ブラウザが、映像（ブラウザ → 中継）を受けた",
+      "hex": "424c01040000000000000082350000000900000005419a246c41",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "wrong_direction_browser_receives_end",
+      "receivers": ["browser"],
+      "note": "ブラウザが、終了通知を受けた",
+      "hex": "424c0107000000000000000000000000167b22726561736f6e223a22757365725f73746f70227d",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "length_mismatch_relay_body_short",
+      "receivers": ["relay"],
+      "note": "本文長 5 に対して、本文が 3 バイト（足りない）",
+      "hex": "424c010400000000000000000000000005010203",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_relay_body_long",
+      "receivers": ["relay"],
+      "note": "本文長 3 に対して、本文が 5 バイト（多い）",
+      "hex": "424c0104000000000000000000000000030102030405",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_relay_trailing_byte_on_empty",
+      "receivers": ["relay"],
+      "note": "本文長 0 に対して、本文が 1 バイト（余分な 1 バイト）",
+      "hex": "424c01040000000000000000000000000000",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_relay_body_missing",
+      "receivers": ["relay"],
+      "note": "本文長 1 に対して、ヘッダだけ（本文が無い）",
+      "hex": "424c010400000000000000000000000001",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_relay_at_limit_boundary",
+      "receivers": ["relay"],
+      "note": "本文長 2,097,135（全体がちょうど上限 2,097,152 バイト）のヘッダだけ。上限を超えていないので too_large ではなく、本文が足りない",
+      "hex": "424c0104000000000000000000001fffef",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_browser_body_short",
+      "receivers": ["browser"],
+      "note": "本文長 5 に対して、本文が 3 バイト（足りない）",
+      "hex": "424c018600000000000000000000000005010203",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_browser_body_long",
+      "receivers": ["browser"],
+      "note": "本文長 3 に対して、本文が 5 バイト（多い）",
+      "hex": "424c0186000000000000000000000000030102030405",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_browser_trailing_byte_on_empty",
+      "receivers": ["browser"],
+      "note": "本文長 0 に対して、本文が 1 バイト（余分な 1 バイト）",
+      "hex": "424c01860000000000000000000000000000",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_browser_body_missing",
+      "receivers": ["browser"],
+      "note": "本文長 1 に対して、ヘッダだけ（本文が無い）",
+      "hex": "424c018600000000000000000000000001",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "length_mismatch_browser_at_limit_boundary",
+      "receivers": ["browser"],
+      "note": "本文長 2,097,135（全体がちょうど上限 2,097,152 バイト）のヘッダだけ。上限を超えていないので too_large ではなく、本文が足りない",
+      "hex": "424c0186000000000000000000001fffef",
+      "error": "length_mismatch"
+    },
+    {
+      "name": "too_large_relay_declared_just_over_limit",
+      "receivers": ["relay"],
+      "note": "本文長 2,097,136（全体が 2,097,153 バイト = 上限を 1 バイト超える）のヘッダだけ。too_large は length_mismatch より先に判定する",
+      "hex": "424c0104000000000000000000001ffff0",
+      "error": "too_large"
+    },
+    {
+      "name": "too_large_relay_declared_max_uint32",
+      "receivers": ["relay"],
+      "note": "本文長が符号なし 32 ビットの最大（4,294,967,295）のヘッダだけ",
+      "hex": "424c0104000000000000000000ffffffff",
+      "error": "too_large"
+    },
+    {
+      "name": "too_large_browser_declared_just_over_limit",
+      "receivers": ["browser"],
+      "note": "本文長 2,097,136（全体が 2,097,153 バイト = 上限を 1 バイト超える）のヘッダだけ。too_large は length_mismatch より先に判定する",
+      "hex": "424c0186000000000000000000001ffff0",
+      "error": "too_large"
+    },
+    {
+      "name": "too_large_browser_declared_max_uint32",
+      "receivers": ["browser"],
+      "note": "本文長が符号なし 32 ビットの最大（4,294,967,295）のヘッダだけ",
+      "hex": "424c0186000000000000000000ffffffff",
+      "error": "too_large"
+    },
+    {
+      "name": "precedence_truncated_header_over_invalid_magic",
+      "receivers": ["relay", "browser"],
+      "note": "10 バイトで識別子も誤り。ヘッダに満たないことを先に判定する",
+      "hex": "ffff0204000000000000",
+      "error": "truncated_header"
+    },
+    {
+      "name": "precedence_invalid_magic_over_unsupported_version",
+      "receivers": ["relay", "browser"],
+      "note": "識別子も版も誤り。識別子を先に判定する",
+      "hex": "585802040000000000000082350000000900000005419a246c41",
+      "error": "invalid_magic"
+    },
+    {
+      "name": "precedence_unsupported_version_over_unknown_type",
+      "receivers": ["relay", "browser"],
+      "note": "版も種別も誤り。版を先に判定する",
+      "hex": "424c02ff00000000000000000000000000",
+      "error": "unsupported_version"
+    },
+    {
+      "name": "precedence_unknown_type_over_length_mismatch",
+      "receivers": ["relay", "browser"],
+      "note": "種別も本文長も誤り。種別を先に判定する",
+      "hex": "424c01ff0000000000000000000000000901",
+      "error": "unknown_type"
+    },
+    {
+      "name": "precedence_wrong_direction_over_too_large_relay",
+      "receivers": ["relay"],
+      "note": "方向も本文長（2 MB 超）も誤り。方向を先に判定する",
+      "hex": "424c0181000000000000000000ffffffff",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "precedence_wrong_direction_over_too_large_browser",
+      "receivers": ["browser"],
+      "note": "方向も本文長（2 MB 超）も誤り。方向を先に判定する",
+      "hex": "424c0104000000000000000000ffffffff",
+      "error": "wrong_direction"
+    },
+    {
+      "name": "precedence_wrong_direction_over_length_mismatch_relay",
+      "receivers": ["relay"],
+      "note": "方向も本文長も誤り。方向を先に判定する",
+      "hex": "424c0187000000000000000000000000097b7d",
+      "error": "wrong_direction"
+    }
+  ]
+}

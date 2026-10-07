@@ -1,0 +1,21 @@
+{
+  "$comment": "POST /api/broadcasts（開始の受付）の拒否理由 14 種ごとの、HTTP ステータスと、再試行で解消するかの区分（resolution）。order は 9.2 の判定順（0〜13。最初に該当した理由で拒否する）で、列挙 rejection_reason の添字と一致する。resolution は列挙 resolution の値。retry_at_rule は、応答の retry_at の決め方で、retry_at_rules のいずれか。応答の形は http-api.md の「受付の拒否」。画面に出す文言を含めない（文言はフロントエンドの文言カタログ）。",
+  "retry_at_rules": ["none", "rate_limit_window", "next_usage_day_start", "next_month_start", "next_quota_day_start"],
+  "retry_at_rules_note": "none は retry_at が null。rate_limit_window は、頻度の枠が空く時刻。next_usage_day_start は、次の JST 03:00（次の利用日の始まり）。next_month_start は、翌月 1 日 00:00 JST。next_quota_day_start は、次の割り当て日の始まり（太平洋時間の 0 時）を、JST（+09:00）で表した時刻。時刻は ISO 8601（秒まで）。",
+  "rejections": {
+    "invalid_input": { "order": 0, "http_status": 422, "resolution": "fix_input", "retry_at_rule": "none" },
+    "not_logged_in": { "order": 1, "http_status": 401, "resolution": "log_in", "retry_at_rule": "none" },
+    "rate_limited": { "order": 2, "http_status": 429, "resolution": "wait", "retry_at_rule": "rate_limit_window" },
+    "bot_check_failed": { "order": 3, "http_status": 403, "resolution": "wait", "retry_at_rule": "none" },
+    "broadcast_in_progress": { "order": 4, "http_status": 409, "resolution": "stop_first", "retry_at_rule": "none" },
+    "youtube_not_connected": { "order": 5, "http_status": 409, "resolution": "connect", "retry_at_rule": "none" },
+    "authorization_revoked": { "order": 6, "http_status": 409, "resolution": "reconnect", "retry_at_rule": "none" },
+    "live_not_enabled": { "order": 7, "http_status": 409, "resolution": "enable_live", "retry_at_rule": "none" },
+    "allowance_consumed": { "order": 8, "http_status": 409, "resolution": "next_usage_day", "retry_at_rule": "next_usage_day_start" },
+    "attempts_exhausted": { "order": 9, "http_status": 409, "resolution": "next_usage_day", "retry_at_rule": "next_usage_day_start" },
+    "intake_paused": { "order": 10, "http_status": 503, "resolution": "after_release", "retry_at_rule": "none" },
+    "transfer_budget_exceeded": { "order": 11, "http_status": 503, "resolution": "next_month", "retry_at_rule": "next_month_start" },
+    "capacity_full": { "order": 12, "http_status": 503, "resolution": "wait", "retry_at_rule": "none" },
+    "quota_insufficient": { "order": 13, "http_status": 503, "resolution": "next_quota_day", "retry_at_rule": "next_quota_day_start" }
+  }
+}
