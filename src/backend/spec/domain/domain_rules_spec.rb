@@ -185,15 +185,15 @@ RSpec.describe "Domain Core の規則の走査器（DomainRules）" do
 
   describe "ファイルの検査（契約の定数モジュールの扱い）" do
     it "app/domain/contract の下のパスは、契約の定数モジュールとして、数値の直書きを許す" do
-      Dir.mktmpdir do |dir|
-        contract_dir = File.join(dir, "app", "domain", "contract")
-        FileUtils.mkdir_p(contract_dir)
-        File.write(File.join(contract_dir, "limits.rb"), "X = 550\n")
-        File.write(File.join(dir, "app", "domain", "other.rb"), "X = 550\n")
+      # 一時ディレクトリは、ブロックなしで作る（ブロック形式は、ブロックの終了時に、中身ごと削除する。後始末は OS に任せる）
+      dir = Dir.mktmpdir("domain_rules_files")
+      contract_dir = File.join(dir, "app", "domain", "contract")
+      FileUtils.mkdir_p(contract_dir)
+      File.write(File.join(contract_dir, "limits.rb"), "X = 550\n")
+      File.write(File.join(dir, "app", "domain", "other.rb"), "X = 550\n")
 
-        expect(DomainRules.violations_in_file(File.join(contract_dir, "limits.rb"))).to eq([])
-        expect(DomainRules.violations_in_file(File.join(dir, "app", "domain", "other.rb")).map(&:rule)).to eq([ :contract_number_literal ])
-      end
+      expect(DomainRules.violations_in_file(File.join(contract_dir, "limits.rb"))).to eq([])
+      expect(DomainRules.violations_in_file(File.join(dir, "app", "domain", "other.rb")).map(&:rule)).to eq([ :contract_number_literal ])
     end
   end
 end

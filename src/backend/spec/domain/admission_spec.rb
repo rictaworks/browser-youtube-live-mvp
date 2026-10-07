@@ -21,6 +21,15 @@ RSpec.describe "開始受付判定の結果（Admission）" do
     reason == "invalid_input" ? [ "title" ] : []
   end
 
+  # Hash・Array・String を、再帰的にたどって、すべて凍結されているか
+  def deeply_frozen?(value)
+    case value
+    when Hash then value.frozen? && value.all? { |key, child| deeply_frozen?(key) && deeply_frozen?(child) }
+    when Array then value.frozen? && value.all? { |child| deeply_frozen?(child) }
+    else value.frozen?
+    end
+  end
+
   describe "Admission::AppliedLimits（適用される上限）" do
     it "設定の時間上限（分）を秒にし、プロファイル（契約の profiles）をそのまま持つ" do
       limits = Admission::AppliedLimits.from_settings(Settings.defaults)
@@ -45,6 +54,64 @@ RSpec.describe "開始受付判定の結果（Admission）" do
       end
       [ nil, [], "720p" ].each do |invalid|
         expect { Admission::AppliedLimits.new(time_limit_seconds: 3_600, profiles: invalid) }.to raise_error(ArgumentError, /profiles/)
+      end
+    end
+
+    describe "profiles の凍結（値オブジェクトを、あとから変更できない）" do
+      it "凍結されていない profiles は、深く凍結した複製にする。呼び出し側の Hash は、凍結せず、あとの変更の影響も受けない" do
+        given = { "720p" => { "width" => 1_280, "codecs" => [ "avc1", "mp4a" ], "label" => +"standard" } }
+        limits = Admission::AppliedLimits.new(time_limit_seconds: 3_600, profiles: given)
+
+        expect(limits.profiles).to eq(given)
+        expect(deeply_frozen?(limits.profiles)).to be(true)
+        expect(given).not_to be_frozen
+        expect(given["720p"]).not_to be_frozen
+        expect(given["720p"]["codecs"]).not_to be_frozen
+        expect(given["720p"]["label"]).not_to be_frozen
+
+        given["720p"]["width"] = 1
+        given["720p"]["codecs"] << "extra"
+        expect(limits.profiles.dig("720p", "width")).to eq(1_280)
+        expect(limits.profiles.dig("720p", "codecs")).to eq([ "avc1", "mp4a" ])
+      end
+
+      it "profiles を、あとから変更しようとすると、FrozenError（外側・内側の Hash・Array・String のどれも）" do
+        limits = Admission::AppliedLimits.new(time_limit_seconds: 3_600, profiles: { "720p" => { "width" => 1_280, "codecs" => [ "avc1" ], "label" => +"standard" } })
+
+        expect { limits.profiles["480p"] = {} }.to raise_error(FrozenError)
+        expect { limits.profiles["720p"]["width"] = 1 }.to raise_error(FrozenError)
+        expect { limits.profiles["720p"]["codecs"] << "x" }.to raise_error(FrozenError)
+        expect { limits.profiles["720p"]["codecs"].first << "x" }.to raise_error(FrozenError)
+        expect { limits.profiles["720p"]["label"] << "x" }.to raise_error(FrozenError)
+      end
+
+      it "外側だけ凍結した profiles（内側は凍結されていない）も、深く凍結した複製にする（浅い凍結を信用しない）" do
+        outer_only = { "720p" => { "codecs" => [ +"avc1" ] } }.freeze
+        limits = Admission::AppliedLimits.new(time_limit_seconds: 3_600, profiles: outer_only)
+
+        expect(deeply_frozen?(limits.profiles)).to be(true)
+        expect(limits.profiles).to eq(outer_only)
+        expect(limits.profiles).not_to equal(outer_only)
+        expect(outer_only["720p"]).not_to be_frozen
+      end
+
+      it "すでに深く凍結された profiles（契約の値など）は、複製せず、そのまま持つ" do
+        already = { "720p" => { "codecs" => [ "avc1".freeze ].freeze }.freeze }.freeze
+
+        expect(Admission::AppliedLimits.new(time_limit_seconds: 3_600, profiles: already).profiles).to equal(already)
+        expect(Admission::AppliedLimits.new(time_limit_seconds: 3_600, profiles: Contract::Limits::PROFILES).profiles).to equal(Contract::Limits::PROFILES)
+      end
+
+      it "数値・真偽値・nil・シンボルは、そのまま持つ（不変）。値は変わらない" do
+        given = { "a" => [ 1, 2.5, nil, true, false, :sym, +"s" ], "b" => { "c" => 3 } }
+        limits = Admission::AppliedLimits.new(time_limit_seconds: 3_600, profiles: given)
+
+        expect(limits.profiles).to eq(given)
+        expect(deeply_frozen?(limits.profiles)).to be(true)
+      end
+
+      it "from_settings の profiles も、深く凍結されている" do
+        expect(deeply_frozen?(Admission::AppliedLimits.from_settings(Settings.defaults).profiles)).to be(true)
       end
     end
 

@@ -9,9 +9,10 @@
 #   5. 受け入れの確認（黒箱。acceptance.rb。issue の受け入れ条件を、公開の API だけで確かめる）
 #   6. 暦の差分検査（differential_calendar.rb。UsageCalendar を、libc のタイムゾーン処理を基準にした独立の算出と、多数の時刻で突き合わせる）
 #   7. Domain Core の規則の走査（scan_domain.rb。実時計・入出力の型・日本語の直書き・契約の固定値の直書き）
-#   8. ソースの走査（scan_sources.py。削除系コマンド・絵文字・不可視の書式文字）
-#   9. requirements.md の変更が、8 章の表の 1 行の追記だけであること（check_requirements_diff.py）
-#  10. （--with-mutation のときだけ。数分かかる）変異テスト（mutate_domain.rb）。実装を 1 か所ずつ壊し、スペックが検出すること
+#   8. ソース走査器の自己検査（scan_sources.py --self-test。合成したソースで、違反を見逃さず、違反でないものを誤検知しないこと）
+#   9. ソースの走査（scan_sources.py。削除系コマンド・標準ライブラリの自動削除（ブロック形式の一時ディレクトリなど）・絵文字・不可視の書式文字）
+#  10. requirements.md の変更が、8 章の表の 1 行の追記だけであること（check_requirements_diff.py）
+#  11. （--with-mutation のときだけ。数分かかる）変異テスト（mutate_domain.rb）。実装を 1 か所ずつ壊し、スペックが検出すること
 #
 # 使い方: test/pr39/run_all.sh [--with-mutation]
 # 終了コード: 0 = すべて成功 / 1 = 失敗がある / 2 = 準備ができていない（.env が無い・引数の誤りなど）
@@ -140,7 +141,10 @@ STDIN_FILE="$HERE/differential_calendar.rb" run "暦の差分検査（UsageCalen
 STDIN_FILE="$HERE/scan_domain.rb" run "Domain Core の規則の走査（実時計・入出力の型・日本語の直書き・契約の固定値の直書き）" \
   scripts/dc.sh exec -T backend bundle exec ruby -
 
-run "ソースの走査（削除系コマンド・絵文字・不可視の書式文字・UTF-8）" \
+run "ソース走査器の自己検査（合成したソースで、違反を見逃さず、違反でないものを誤検知しないこと）" \
+  python3 -I "$HERE/scan_sources.py" --self-test
+
+run "ソースの走査（削除系コマンド・標準ライブラリの自動削除・絵文字・不可視の書式文字・UTF-8）" \
   python3 -I "$HERE/scan_sources.py" "$ROOT_DIR"
 
 run "requirements.md の変更が、8 章の表への 1 行の追記だけであること" \

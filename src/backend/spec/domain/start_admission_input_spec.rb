@@ -1,4 +1,5 @@
 require "spec_helper"
+require "pp"
 require_relative "support/domain_loader"
 
 # 開始の受付の入力の検証（requirements.md 9.1・9.2 の順 0。契約 http-api.md の POST /api/broadcasts の要求）。
@@ -102,6 +103,27 @@ RSpec.describe "開始の受付の入力の検証（StartAdmission::Input）" do
         expect(text).to include("[FILTERED]", "unlisted", "false")
         expect(text).to be_ascii_only
       end
+    end
+
+    it "pp・pretty_inspect も、タイトルを含まない（Data の既定の pretty_print は、メンバーの値をそのまま出す）" do
+      secret = input(title: "SECRET-TITLE-0123456789")
+      long = input(title: "SECRET-" + ("x" * 90))
+
+      [
+        secret.pretty_inspect, [ secret ].pretty_inspect, { input: secret }.pretty_inspect, PP.pp(secret, +""),
+        PP.singleline_pp(secret, +""), PP.pp(long, +"", 20), long.pretty_inspect
+      ].each do |text|
+        expect(text).not_to include("SECRET")
+        expect(text).to include("[FILTERED]", "unlisted", "false")
+        expect(text).to be_ascii_only
+      end
+    end
+
+    it "pp の表記は、inspect と同じ（タイトルを伏せた 1 行。折り返さない）" do
+      secret = input(title: "SECRET-TITLE-0123456789")
+
+      expect(secret.pretty_inspect.chomp).to eq(secret.inspect)
+      expect(PP.pp(secret, +"", 10).chomp).to eq(secret.inspect)
     end
 
     it "to_h は、判定のために、タイトルを持つ（呼び出し側が、ログへ出さない）" do

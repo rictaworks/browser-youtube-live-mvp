@@ -85,6 +85,10 @@ MUTATIONS = [
   [ "利用枠消費済みの再試行の目安を翌月 1 日にする", "start_admission/retry_at.rb", "\"next_usage_day_start\" => ->(now, _rate_limit) { UsageCalendar.next_usage_date_start(now) }", "\"next_usage_day_start\" => ->(now, _rate_limit) { UsageCalendar.next_month_start(now) }" ],
   [ "暦月の形で 13 月を許す", "account_snapshot.rb", "(0[1-9]|1[0-2])", "(0[1-9]|1[0-3])" ],
   [ "割り当て超過の日（exhausted）でも予約できるようにする", "quota_policy.rb", "return false if day.exhausted", "" ],
+  [ "Input の inspect が、タイトルを出す", "start_admission/input.rb", "title=\#{FILTERED}", "title=\#{title.inspect}" ],
+  [ "Input の pretty_print を、タイトルを出す既定の動作へ戻す", "start_admission/input.rb", "printer.text(inspect)", "super" ],
+  [ "AppliedLimits の profiles を、凍結しない", "admission/applied_limits.rb", "profiles: deeply_frozen?(profiles) ? profiles : frozen_copy(profiles))", "profiles: profiles)" ],
+  [ "AppliedLimits が、外側だけの凍結を信用する（浅い凍結）", "admission/applied_limits.rb", "deeply_frozen?(profiles) ? profiles : frozen_copy(profiles)", "profiles.frozen? ? profiles : frozen_copy(profiles)" ],
   [ "契約の固定値 550 を直書きする", "quota_policy.rb", "RESERVATION_UNITS = Contract::Limits::QUOTA.fetch(\"broadcast_reservation_units\")", "RESERVATION_UNITS = 550" ]
 ].freeze
 

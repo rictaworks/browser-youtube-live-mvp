@@ -9,6 +9,7 @@
 # 終了コード: 0 = すべて成功 / 1 = 失敗がある
 require "date"
 require "json"
+require "pp"
 require "time"
 require "zeitwerk"
 
@@ -386,6 +387,20 @@ check("各規則の境界: 利用枠（設定 + 追加 - 消費 <= 0）・開始
     with.call({}, { reserved_units: 8_450 }).is_a?(Admission::Accepted) &&
     rejected.call(with.call({}, { reserved_units: 8_451 }), "quota_insufficient")
 end
+check("適用される上限（profiles）は、深く凍結されていて、あとから変更できない。凍結されていない入力は、深く凍結した複製にする") do
+  deep = lambda do |value|
+    case value
+    when Hash then value.frozen? && value.all? { |key, child| deep.call(key) && deep.call(child) }
+    when Array then value.frozen? && value.all? { |child| deep.call(child) }
+    else value.frozen?
+    end
+  end
+  profiles = Case.new.decide.limits.profiles
+  given = { "720p" => { "codecs" => [ +"avc1" ] } }
+  copied = Admission::AppliedLimits.new(time_limit_seconds: 60, profiles: given).profiles
+  deep.call(profiles) && raises?(FrozenError) { profiles.fetch("720p")["width"] = 1 } &&
+    deep.call(copied) && !given.frozen? && !given["720p"]["codecs"].frozen?
+end
 check("割り当て超過が返った日（exhausted）の開始受付は、API 割り当て不足（次の割り当て日の始まりを目安にする）") do
   scenario = Case.new
   scenario.quota[:exhausted] = true
@@ -408,9 +423,10 @@ check("出力は、ユーザーの識別情報・タイトルを含まない（�
   accepted = Case.new.tap { |c| c.input = StartAdmission::Input.new(title: secret, privacy_status: "unlisted", made_for_kids: false) }.decide
   rejected = Case.new.violate("capacity_full").tap { |c| c.input = StartAdmission::Input.new(title: secret, privacy_status: "unlisted", made_for_kids: false) }.decide
   invalid = Case.new.tap { |c| c.input = StartAdmission::Input.new(title: "<#{secret}>", privacy_status: "unlisted", made_for_kids: false) }.decide
-  input_text = StartAdmission::Input.new(title: secret, privacy_status: "unlisted", made_for_kids: false).inspect
+  secret_input = StartAdmission::Input.new(title: secret, privacy_status: "unlisted", made_for_kids: false)
+  input_texts = [ secret_input.inspect, secret_input.to_s, secret_input.pretty_inspect, [ secret_input ].pretty_inspect ]
   [ accepted, rejected, invalid ].none? { |result| result.inspect.include?("SECRET") || result.to_h.to_s.include?("SECRET") } &&
-    !input_text.include?("SECRET")
+    input_texts.none? { |text| text.include?("SECRET") }
 end
 
 puts "== 不変・純粋"

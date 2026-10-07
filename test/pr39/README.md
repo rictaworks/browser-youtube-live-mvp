@@ -6,8 +6,8 @@ PR #39（issue #5「アプリケーション Domain Core（1）: 利用日・割
 
 ```bash
 scripts/setup_dev_env.sh                 # .env を生成します（済んでいれば何も変わりません）
-test/pr39/run_all.sh                 # 手順 1〜9（数分）
-test/pr39/run_all.sh --with-mutation # 手順 10（変異テスト。さらに数分）も実行します
+test/pr39/run_all.sh                     # 手順 1〜10（数分）
+test/pr39/run_all.sh --with-mutation     # 手順 11（変異テスト。さらに数分）も実行します
 ```
 
 終了コード: 0 = すべて成功、1 = 失敗がある、2 = 準備ができていない（`.env` が無い・引数の誤り）。各手順のログは、`mktemp` で作る一時ディレクトリに残ります（削除しません。場所は実行の最初と最後に表示します）。
@@ -18,16 +18,17 @@ test/pr39/run_all.sh --with-mutation # 手順 10（変異テスト。さらに�
 | 2 | RuboCop（omakase）を、`app/domain` のこの issue のファイルに掛けます |
 | 3 | `spec/config/application_spec.rb`（`rails_helper` を読み、Rails が `app/domain` を管理する）と、この issue のスペックを同じ実行にします。Rails のローダーが先に `app/domain` を管理しても、`DomainLoader` が衝突せず、スペックが通ること（DB を使います。`TEST_DB_NAME` 既定 `bl_test_issue5`） |
 | 4 | 手順 3 を、Rails の `eager_load` を有効にして（CI と同じ `CI=true`）実行します。`app/domain` のすべてのファイルが、Rails の eager load で読み込めること |
-| 5 | `acceptance.rb`: 黒箱の受け入れの確認です。issue の受け入れ条件（日付の算出・設定値・開始受付判定・割り当て台帳・転送量）を、公開の API だけで、36 項目確かめます |
+| 5 | `acceptance.rb`: 黒箱の受け入れの確認です。issue の受け入れ条件（日付の算出・設定値・開始受付判定・割り当て台帳・転送量）を、公開の API だけで、37 項目確かめます |
 | 6 | `differential_calendar.rb`: 暦の差分検査です。`UsageCalendar`（TZInfo のタイムゾーン定義）の 6 つの関数を、OS の libc のタイムゾーン処理（`TZ` 環境変数と `Time.local`）を基準にした独立の算出と、約 3.3 万の時刻（乱数と、夏時間の切り替え・日付の境界の前後 2 時間）で突き合わせます。固定の時差の誤りを、広い範囲で検出します（`ISSUE05_DIFF_SAMPLES` で乱数の時刻の数を変えられます。既定 2 万） |
 | 7 | `scan_domain.rb`: `app/domain` のすべてのファイルを、Ruby の字句解析（Ripper）で走査します。入出力・環境の型（`Rails`・`ActiveRecord`・`ENV`・`File` など）、実時計（`Time.now`・`Date.today`・`Time.current` など）、グローバル変数、出力・乱数・待機、文字列リテラルの日本語、契約の固定値（500・550・340・210・9,000・10,000）の数値の直書きが無いこと |
-| 8 | `scan_sources.py`: `app/domain`・`spec/domain`・このディレクトリに、削除系コマンド・絵文字・不可視の書式文字（ゼロ幅スペースなど）が無く、UTF-8 として読めること（CI の hygiene と同じ規則を、コメントも含めて適用します） |
-| 9 | `check_requirements_diff.py`: `requirements.md` の変更が、8 章の制限値の表への「bot 判定のスコアの閾値」の 1 行の追記だけ（追記 1 行・削除 0 行）で、20.4 の設定 9 件・19 章の設定の画面と矛盾しないこと |
-| 10 | `mutate_domain.rb`（`--with-mutation`）: 実装を 1 か所ずつ壊し（38 種。割り当て日を UTC-8 や UTC-7 の固定にする、判定順を入れ替える、境界の不等号を変える、枠の取り崩しを許す、不正な設定を既定値へ戻す、など）、スペックが必ず失敗することを確かめます。コンテナの `/tmp` に複製を作ります（削除しません） |
+| 8 | `scan_sources.py --self-test`: ソース走査器の自己検査です。合成した小さなソース（58 件）で、走査器が、違反を見逃さず（削除系の語・ブロック形式の一時ディレクトリの作成・絵文字・不可視の書式文字）、違反でないもの（ブロックなしの作成・コメント・別の名前）を誤検知しないことを確かめます |
+| 9 | `scan_sources.py`: `app/domain`・`spec/domain`・このディレクトリに、削除系コマンド・標準ライブラリが自動でファイル・ディレクトリを削除する呼び出し（ブロック形式の `Dir.mktmpdir`・`Tempfile`。一時ディレクトリは、ブロックなしで作り、後始末は OS に任せます）・絵文字・不可視の書式文字（ゼロ幅スペースなど）が無く、UTF-8 として読めること（CI の hygiene と同じ規則を、コメントも含めて適用します） |
+| 10 | `check_requirements_diff.py`: `requirements.md` の変更が、8 章の制限値の表への「bot 判定のスコアの閾値」の 1 行の追記だけ（追記 1 行・削除 0 行）で、20.4 の設定 9 件・19 章の設定の画面と矛盾しないこと |
+| 11 | `mutate_domain.rb`（`--with-mutation`）: 実装を 1 か所ずつ壊し（42 種。割り当て日を UTC-8 や UTC-7 の固定にする、判定順を入れ替える、境界の不等号を変える、枠の取り崩しを許す、不正な設定を既定値へ戻す、など）、スペックが必ず失敗することを確かめます。コンテナの `/tmp` に複製を作ります（削除しません） |
 
 ## ユーザーから見える変更
 
-ありません。Domain Core（入出力に依存しない純粋な Ruby）と、`requirements.md` の 1 行の追記だけです。画面・API の挙動は変わりません。確認は、開発者が `scripts/test_backend.sh --no-db spec/domain` を実行して、緑になることです（`spec/domain/lifecycle/` は、別の issue のスペックです）。
+ありません。Domain Core（入出力に依存しない純粋な Ruby）と、`requirements.md` の 1 行の追記だけです。画面・API の挙動は変わりません。確認は、開発者が `scripts/test_backend.sh --no-db spec/domain` を実行して、緑になることです。
 
 ## 実装担当のスペックの範囲（`src/backend/spec/domain/`）
 

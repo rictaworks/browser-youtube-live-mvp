@@ -45,6 +45,11 @@ module StartAdmission
     end
     alias_method :to_s, :inspect
 
+    # pp・pretty_inspect も、同じ表記にする（Data の既定の pretty_print は、メンバーの値を、そのまま出す）。折り返さない 1 行。
+    def pretty_print(printer)
+      printer.text(inspect)
+    end
+
     private
 
     # UTF-8（または ASCII だけ）の正しい文字列で、文字数が範囲内、山括弧なし、空白だけでない。
