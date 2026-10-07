@@ -17,6 +17,9 @@ gem "tzinfo-data", platforms: %i[ windows jruby ]
 group :development, :test do
   gem "rspec-rails"
 
+  # テスト用のファクトリ（spec/factories）。テストデータには明らかなダミー値（dummy-…）を使う
+  gem "factory_bot_rails"
+
   # 既知の脆弱性を持つ gem を検知する（無視する CVE は config/bundler-audit.yml に書く）
   gem "bundler-audit", require: false
 
