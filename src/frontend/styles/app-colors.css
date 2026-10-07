@@ -1,0 +1,11 @@
+/* アプリ固有の色。デザインシステムのトークン（tokens/colors.css のコピー）には足さず、ここに置く（CLAUDE.md U11）。
+   出どころ: app-ui/ の各 .dc.html が :root に持つ追加色（ライブの赤・警告の琥珀）。値はモックのまま。 */
+:root {
+  --live: oklch(0.72 0.2 22);
+  --live-bg: oklch(0.72 0.2 22 / 0.12);
+  --warn: oklch(0.84 0.15 85);
+  --warn-bg: oklch(0.84 0.15 85 / 0.1);
+
+  /* 停止ボタンのホバーの光彩。出どころ: app-ui/Studio.dc.html の .btn.stop:hover（--live の不透明度 0.3） */
+  --glow-live: 0 0 24px oklch(0.72 0.2 22 / 0.3);
+}

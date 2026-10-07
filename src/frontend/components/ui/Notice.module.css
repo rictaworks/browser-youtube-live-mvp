@@ -1,0 +1,61 @@
+/* 通知（情報・警告・エラー）。出どころ: app-ui/Studio.dc.html の .banner。
+   種類は、色だけでなく、形の異なるアイコンと、支援技術へ読ませる文言で伝える（要件 17.2）。 */
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-16);
+  padding: var(--sp-16) var(--sp-20);
+  border: 1px solid var(--warn);
+  background: var(--warn-bg);
+  color: var(--white);
+  font-size: var(--fs-13);
+  line-height: var(--lh-ui);
+}
+
+.icon {
+  flex: none;
+  margin-top: var(--sp-4);
+  color: var(--warn);
+}
+
+.info {
+  border-color: var(--teal-50);
+  background: var(--teal-05);
+}
+
+.info .icon {
+  color: var(--teal);
+}
+
+.error {
+  border-color: var(--live);
+  background: var(--live-bg);
+}
+
+.error .icon {
+  color: var(--live);
+}
+
+.body {
+  flex: 1;
+  min-width: 0;
+}
+
+.title {
+  font-weight: var(--fw-semibold);
+}
+
+/* 対処の操作（エラーの通知は、対処の操作を伴える） */
+.action {
+  flex: none;
+}
+
+@media (max-width: 767px) {
+  .notice {
+    flex-wrap: wrap;
+  }
+
+  .action {
+    flex-basis: 100%;
+  }
+}

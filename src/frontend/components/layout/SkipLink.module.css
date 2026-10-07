@@ -1,0 +1,17 @@
+/* スキップリンク: 通常は画面の外へ置き、キーボードでフォーカスしたときだけ表示する（要件 17.6）。 */
+.skipLink {
+  position: absolute;
+  top: var(--sp-16);
+  left: var(--sp-16);
+  z-index: var(--z-skip-link);
+  padding: var(--sp-12) var(--sp-16);
+  border: 1px solid var(--teal);
+  background: var(--bg-footer);
+  color: var(--white);
+  font-size: var(--fs-14);
+  transform: translateY(-200%);
+}
+
+.skipLink:focus {
+  transform: none;
+}

@@ -1,0 +1,28 @@
+/* カード（見出しのアイブロウ付き）。出どころ: app-ui/Studio.dc.html・Terms.dc.html の .card・.eb。 */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-12);
+  padding: var(--sp-24) var(--sp-28);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-12);
+  color: var(--section-label);
+  font-size: var(--fs-12);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-ui);
+  letter-spacing: var(--ls-02);
+  text-transform: uppercase;
+}
+
+.eyebrow::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--silver-10);
+}

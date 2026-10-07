@@ -1,0 +1,54 @@
+/* ヘッダー（ワードマークとナビ）。出どころ: app-ui/Terms.dc.html の .top・.wm・.nav。 */
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-12) var(--sp-24);
+  padding: var(--sp-20) var(--section-pad-x);
+}
+
+.wordmark {
+  color: var(--white);
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--ls-008);
+}
+
+.accent {
+  color: var(--teal);
+  font-weight: var(--fw-semibold);
+}
+
+.nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-12) var(--sp-28);
+}
+
+.navLink {
+  color: var(--silver-70);
+  font-size: var(--fs-12);
+  letter-spacing: var(--ls-02);
+  text-transform: uppercase;
+}
+
+.navLink:hover {
+  color: var(--teal);
+}
+
+/* いま見ている画面: 色（--teal）に加えて、下線でも示す（色だけで区別しない） */
+.navLink[aria-current="page"] {
+  color: var(--teal);
+  text-shadow: var(--text-glow-step);
+  text-decoration: underline;
+  text-underline-offset: var(--sp-8);
+}
+
+@media (max-width: 767px) {
+  .header {
+    padding-right: var(--section-pad-x-mobile);
+    padding-left: var(--section-pad-x-mobile);
+  }
+}

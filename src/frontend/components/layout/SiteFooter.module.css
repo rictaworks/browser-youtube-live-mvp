@@ -1,0 +1,21 @@
+/* フッター。出どころ: app-ui/Terms.dc.html の .foot。本文が短い画面でも、画面の下端に置く（margin-top: auto。body が縦の flex）。 */
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--sp-12) var(--sp-28);
+  margin-top: auto;
+  padding: var(--sp-28) var(--section-pad-x);
+  border-top: 1px solid var(--silver-08);
+  background: var(--bg-footer);
+  font-size: var(--fs-12);
+  letter-spacing: var(--ls-02);
+  text-transform: uppercase;
+}
+
+@media (max-width: 767px) {
+  .footer {
+    padding-right: var(--section-pad-x-mobile);
+    padding-left: var(--section-pad-x-mobile);
+  }
+}

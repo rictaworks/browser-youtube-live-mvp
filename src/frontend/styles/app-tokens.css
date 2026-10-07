@@ -1,0 +1,30 @@
+/* アプリ固有の、色以外のトークン。デザインシステムのトークン（tokens/ のコピー）には足さず、ここに置く。
+   tokens/ のあとに読み込む（app/globals.css）。 */
+:root {
+  /* 書体の接続: app/layout.tsx の next/font（自己ホスト）が定義する --font-inter・--font-noto-sans-jp・--font-playfair-display を、
+     デザインシステムの --font-sans・--font-display へつなぐ。tokens/typography.css は 'Inter' などの書体名を直接書くが、
+     next/font は自己ホストした書体へ別名（ハッシュ付き）を付けるため、そのままでは届かない。
+     システム書体へ落ちる並び（sans-serif・serif）は、tokens/typography.css と同じく残す。 */
+  --font-sans: var(--font-inter), var(--font-noto-sans-jp), sans-serif;
+  --font-display: var(--font-playfair-display), serif;
+
+  /* 文字: ページ題は 40px（モック）。本文の行間は 1.5 倍（要件 17.3）。--lh-flush は、ボタンなど 1 行の部品の行間 */
+  --fs-page-title: 40px;
+  --lh-ui: 1.5;
+  --lh-flush: 1;
+
+  /* フォーカスの輪郭（モックの a:focus-visible: 2px・オフセット 3px）。色は --white */
+  --focus-ring-width: 2px;
+  --focus-ring-offset: 3px;
+
+  /* ボタンを押した瞬間の沈み込み（要件 17.5 の「押下」の状態。モックには無い） */
+  --press-offset: 1px;
+
+  /* レイアウト: 右のパネルの幅は 320px（要件 17.4）。単一カラムの本文の最大幅・スタジオの最大幅はモックの値 */
+  --layout-aside-width: 320px;
+  --layout-page-max: 860px;
+  --layout-studio-max: 1360px;
+
+  /* 重なり: スキップリンクは、すべての上に出す */
+  --z-skip-link: 100;
+}

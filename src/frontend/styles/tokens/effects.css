@@ -1,0 +1,37 @@
+:root {
+  --glow-dot: 0 0 8px var(--teal); /* @kind shadow */
+  --glow-line: 0 0 10px var(--teal); /* @kind shadow */
+  --glow-tl-dot: 0 0 12px var(--teal); /* @kind shadow */
+  --glow-cta: 0 0 30px rgba(0,251,255,0.3); /* @kind shadow */
+  --glow-card: 0 0 40px rgba(0,251,255,0.15); /* @kind shadow */
+  --glow-social: 0 0 12px rgba(0,251,255,0.3); /* @kind shadow */
+  --glow-back-top: 0 0 20px rgba(0,251,255,0.2); /* @kind shadow */
+  --glow-bar: 0 0 10px rgba(0,251,255,0.3); /* @kind shadow */
+  --text-glow-hero: 0 0 60px rgba(0,251,255,0.3); /* @kind shadow */
+  --text-glow-hero-em: 0 0 30px rgba(0,251,255,0.8), 0 0 80px rgba(0,251,255,0.4); /* @kind shadow */
+  --text-glow-stat: 0 0 20px var(--teal); /* @kind shadow */
+  --text-glow-icon: 0 0 15px var(--teal); /* @kind shadow */
+  --text-glow-step: 0 0 10px var(--teal); /* @kind shadow */
+
+  --gradient-nav: linear-gradient(to bottom, rgba(8,12,24,0.95), transparent); /* @kind other */
+  --gradient-hero-overlay: linear-gradient(to bottom, rgba(8,12,24,0.3) 0%, rgba(8,12,24,0.1) 40%, rgba(8,12,24,0.7) 100%); /* @kind other */
+  --gradient-section-down: linear-gradient(to bottom, #0a0e1a, #080c18); /* @kind other */
+  --gradient-section-up: linear-gradient(to bottom, #080c18, #0a0e1a); /* @kind other */
+  --gradient-divider: linear-gradient(to bottom, transparent, var(--teal), transparent); /* @kind other */
+  --gradient-card-hover: linear-gradient(135deg, rgba(0,251,255,0.08), transparent); /* @kind other */
+  --gradient-bar: linear-gradient(to top, var(--teal), rgba(0,251,255,0.4)); /* @kind other */
+  --gradient-timeline: linear-gradient(to bottom, rgba(0,251,255,0.5), rgba(0,251,255,0.1)); /* @kind other */
+  --gradient-roadmap-glow: radial-gradient(ellipse, rgba(0,251,255,0.04) 0%, transparent 70%); /* @kind other */
+
+  --blur-card: blur(8px); /* @kind other */
+  --filter-hero-img: brightness(0.45) saturate(1.2) hue-rotate(180deg); /* @kind other */
+  --filter-panel: brightness(0.3) saturate(0.8); /* @kind other */
+  --filter-panel-hover: brightness(0.4) saturate(1); /* @kind other */
+  --filter-workflow-img: brightness(0.8) saturate(0.9) hue-rotate(170deg); /* @kind other */
+
+  --dur-fast: 0.3s; /* @kind other */
+  --dur-card: 0.4s; /* @kind other */
+  --dur-panel: 0.6s; /* @kind other */
+  --dur-fade: 0.8s; /* @kind other */
+  --ease: ease; /* @kind other */
+}

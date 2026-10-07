@@ -1,0 +1,37 @@
+/* チップ（状態の文言と図形）。出どころ: app-ui/Studio.dc.html の .chip。 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-8);
+  border: 1px solid var(--silver-60);
+  color: var(--silver);
+  font-size: var(--fs-12);
+  line-height: var(--lh-ui);
+  letter-spacing: var(--ls-005);
+  white-space: nowrap;
+}
+
+.neutral {
+  border-color: var(--silver-60);
+  color: var(--silver);
+}
+
+.ok {
+  border-color: var(--teal-50);
+  color: var(--teal);
+}
+
+.warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.bad {
+  border-color: var(--live);
+  color: var(--white);
+}
+
+.bad .icon {
+  color: var(--live);
+}

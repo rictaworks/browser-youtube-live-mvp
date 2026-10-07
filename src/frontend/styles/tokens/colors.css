@@ -1,0 +1,53 @@
+/* Base tokens — copied verbatim from the site's :root */
+:root {
+  --bg: #080c18;
+  --bg2: #0a0e1a;
+  --teal: #00fbff;
+  --teal-dim: rgba(0,251,255,0.15);
+  --teal-glow: rgba(0,251,255,0.4);
+  --silver: #c0c0c0;
+  --silver-dim: rgba(192,192,192,0.5);
+  --white: #f0f4ff;
+  --card-bg: rgba(10,14,26,0.85);
+  --border: rgba(0,251,255,0.2);
+  --section-label: rgba(0,251,255,0.7);
+
+  /* Literal values used in the site's rules (not in :root there) */
+  --bg-footer: #050810;
+  --teal-02: rgba(0,251,255,0.02);
+  --teal-04: rgba(0,251,255,0.04);
+  --teal-05: rgba(0,251,255,0.05);
+  --teal-08: rgba(0,251,255,0.08);
+  --teal-10: rgba(0,251,255,0.1);
+  --teal-30: rgba(0,251,255,0.3);
+  --teal-50: rgba(0,251,255,0.5);
+  --teal-80: rgba(0,251,255,0.8);
+  --silver-07: rgba(192,192,192,0.07);
+  --silver-08: rgba(192,192,192,0.08);
+  --silver-10: rgba(192,192,192,0.1);
+  --silver-20: rgba(192,192,192,0.2);
+  --silver-25: rgba(192,192,192,0.25);
+  --silver-30: rgba(192,192,192,0.3);
+  --silver-40: rgba(192,192,192,0.4);
+  --silver-60: rgba(192,192,192,0.6);
+  --silver-70: rgba(192,192,192,0.7);
+  --navy-60: rgba(10,14,26,0.6);
+  --navy-95: rgba(8,12,24,0.95);
+
+  /* Semantic aliases */
+  --surface-page: var(--bg);
+  --surface-alt: var(--bg2);
+  --surface-footer: var(--bg-footer);
+  --surface-card: var(--card-bg);
+  --surface-faq-q: var(--navy-60);
+  --surface-active: var(--teal-05);
+  --text-primary: var(--white);
+  --text-body: var(--silver);
+  --text-muted: var(--silver-dim);
+  --text-faint: var(--silver-30);
+  --text-accent: var(--teal);
+  --border-accent: var(--border);
+  --border-neutral: var(--silver-10);
+  --border-hairline: var(--silver-08);
+  --accent: var(--teal);
+}
