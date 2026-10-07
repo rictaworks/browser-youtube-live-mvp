@@ -1,0 +1,37 @@
+/* 接続状態のチップ。出どころ: app-ui/Account.dc.html の .chip。共通部品の Chip（components/ui/Chip.module.css）と同じ規則・同じ色の組。 */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-8);
+  padding: var(--sp-4) var(--sp-8);
+  border: 1px solid var(--silver-60);
+  color: var(--silver);
+  font-size: var(--fs-12);
+  line-height: var(--lh-ui);
+  letter-spacing: var(--ls-005);
+  white-space: nowrap;
+}
+
+.neutral {
+  border-color: var(--silver-60);
+  color: var(--silver);
+}
+
+.ok {
+  border-color: var(--teal-50);
+  color: var(--teal);
+}
+
+.warn {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+
+.bad {
+  border-color: var(--live);
+  color: var(--white);
+}
+
+.bad .icon {
+  color: var(--live);
+}

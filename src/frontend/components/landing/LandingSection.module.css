@@ -1,0 +1,61 @@
+/* ランディングの区画。出どころ: app-ui/Landing.dc.html の .sec・.sec.alt・.sl・.in・.st。
+   色・余白・書体は、トークンの変数だけを使う。モックの 4 の倍数でない余白は、近い値へ丸めた（要件 17.4）。
+   見出しの下の線は、背景色（--teal の塗り）ではなく、上の罫線で描く（背景に使える色は、コントラストの検査の対象に載っているものだけ）。 */
+.section {
+  position: relative;
+  padding: var(--sp-100) var(--section-pad-x);
+}
+
+.alt {
+  background: var(--gradient-section-down);
+}
+
+.label {
+  position: absolute;
+  top: var(--sp-36);
+  left: var(--section-pad-x);
+  color: var(--section-label);
+  font-size: var(--fs-11);
+  letter-spacing: var(--ls-02);
+  text-transform: uppercase;
+}
+
+.number {
+  margin-right: var(--sp-12);
+  color: var(--teal);
+  font-weight: var(--fw-semibold);
+  text-shadow: var(--text-glow-step);
+}
+
+.inner {
+  max-width: var(--container-max);
+  margin: 0 auto;
+}
+
+.heading {
+  font-family: var(--font-display);
+  font-size: var(--fs-section-title);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-title);
+  text-align: center;
+}
+
+.heading::after {
+  content: "";
+  display: block;
+  width: var(--sp-60);
+  height: 0;
+  margin: var(--sp-20) auto 0;
+  border-top: 2px solid var(--teal);
+  box-shadow: var(--glow-line);
+}
+
+@media (max-width: 767px) {
+  .section {
+    padding: var(--sp-100) var(--section-pad-x-mobile) var(--sp-80);
+  }
+
+  .label {
+    left: var(--section-pad-x-mobile);
+  }
+}

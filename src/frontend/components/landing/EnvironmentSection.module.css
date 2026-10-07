@@ -1,0 +1,35 @@
+/* 対応環境・利用前の確認。出どころ: app-ui/Landing.dc.html の .two・.ul。 */
+.two {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--sp-24);
+  margin-top: var(--sp-60);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-12);
+  color: var(--silver);
+  font-size: var(--fs-14);
+  line-height: var(--lh-sub);
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  gap: var(--sp-12);
+}
+
+.bullet {
+  flex: none;
+  margin-top: var(--sp-8);
+  color: var(--teal);
+  font-size: var(--fs-10);
+}
+
+@media (max-width: 767px) {
+  .two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

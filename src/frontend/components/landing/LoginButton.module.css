@@ -1,0 +1,9 @@
+/* ログインのボタン（「LOG IN WITH GOOGLE」）。出どころ: app-ui/Landing.dc.html の .cta。
+   見た目の基本は、共通部品のボタン（主要）。ここは、ランディングの大きさ（余白・字間）だけを足す。
+   モックの 4 の倍数でない余白（18 px）は、近い値（20 px）へ丸めた。
+   共通部品の .button と同じ詳細度のため、読み込みの順序に依らず勝つよう、要素の名前を添える（button・a）。 */
+button.cta,
+a.cta {
+  padding: var(--sp-20) var(--sp-40);
+  letter-spacing: var(--ls-02);
+}

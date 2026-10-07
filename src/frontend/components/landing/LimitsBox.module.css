@@ -1,0 +1,15 @@
+/* 見出しつきの囲み。出どころ: app-ui/Landing.dc.html の .box。余白 32 px は、トークンに無いため、近い値（28・36）へ丸めた。 */
+.box {
+  padding: var(--sp-28) var(--sp-36);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+}
+
+.title {
+  margin-bottom: var(--sp-16);
+  color: var(--section-label);
+  font-size: var(--fs-11);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-025);
+  text-transform: uppercase;
+}

@@ -9,7 +9,10 @@
 //
 // 後続の画面は、messages/<名前空間>.ts を足し、ここへ 1 行で登録する（例: landing・studio・account）。
 import { BRAND_NAME } from "@/config/brand";
+import { account } from "./account";
+import { apiNotice } from "./api-notices";
 import { common } from "./common";
+import { landing } from "./landing";
 import { privacy } from "./privacy";
 import { system } from "./system";
 import { terms } from "./terms";
@@ -22,5 +25,8 @@ export const ja = {
     ...system,
     terms,
     privacy,
+    landing,
+    account,
+    apiNotice,
   },
 } as const;

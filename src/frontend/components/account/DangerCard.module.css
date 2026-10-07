@@ -1,0 +1,16 @@
+/* Danger Zone のカード。出どころ: app-ui/Account.dc.html の .card.danger（枠と見出しが、ライブの赤）。
+   共通部品の Card の規則（枠・見出しの色）と同じ詳細度のため、読み込みの順序に依らず勝つよう、要素の名前を添える。 */
+section.danger {
+  border-color: var(--live);
+}
+
+section.danger h2 {
+  color: var(--live);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-12);
+}

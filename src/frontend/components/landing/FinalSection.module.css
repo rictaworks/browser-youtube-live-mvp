@@ -1,0 +1,14 @@
+/* 最後の CTA。出どころ: app-ui/Landing.dc.html の .final と、見出しの強調（イタリックの --teal）。 */
+.final {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-28);
+  text-align: center;
+}
+
+.accent {
+  color: var(--teal);
+  font-style: italic;
+  text-shadow: var(--text-glow-hero-em);
+}

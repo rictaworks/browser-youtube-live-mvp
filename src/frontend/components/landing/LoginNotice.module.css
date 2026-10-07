@@ -1,0 +1,5 @@
+/* ログインの通知。出どころ: app-ui/Landing.dc.html の .banner（最大幅 520 px・左揃え）。 */
+.notice {
+  max-width: 520px;
+  text-align: left;
+}

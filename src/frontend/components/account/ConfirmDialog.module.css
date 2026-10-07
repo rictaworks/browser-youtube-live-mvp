@@ -1,0 +1,56 @@
+/* 確認用のダイアログ。出どころ: app-ui/Studio.dc.html の .overlay・.dlg（開始ダイアログ）。
+   背景の暗幕は、背景色の透明度（--bg-footer の不透明度 0.84）で作る。パネルの背景は --card-bg（コントラストの検査の対象にある面）。
+   z-index 80 は、モックと同じ（スキップリンクの 100 より下）。 */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sp-20);
+}
+
+.overlay::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--bg-footer);
+  backdrop-filter: var(--blur-card);
+  opacity: 0.84;
+}
+
+.dialog {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-16);
+  width: min(560px, 100%);
+  max-height: 100%;
+  padding: var(--sp-28) var(--sp-36);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  box-shadow: var(--glow-card);
+  overflow: auto;
+}
+
+.title {
+  color: var(--white);
+  font-family: var(--font-display);
+  font-size: var(--fs-28);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-title);
+}
+
+.description {
+  color: var(--silver);
+  font-size: var(--fs-14);
+  line-height: var(--lh-body);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--sp-12);
+}
