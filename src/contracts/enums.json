@@ -1,0 +1,121 @@
+{
+  "$comment": "契約の列挙（符号）。符号は英小文字の snake_case（プロファイルのみ 720p・480p）。画面に出す文言を含めない（文言はフロントエンドの文言カタログ）。各層（Ruby・TypeScript・Go）の定数モジュールは、この JSON との一致をテストで保証する（src/contracts/README.md）。values の順は契約の一部（拒否理由は 9.2 の順、適応制御の条件は 12 章の表の順）。",
+  "enums": {
+    "source_kind": {
+      "source": "requirements.md 20.4（ソース種別）・4 章",
+      "values": ["camera", "screen", "microphone", "shared_audio", "slate"]
+    },
+    "layout": {
+      "source": "requirements.md 20.4（レイアウト）・11.3",
+      "values": ["screen_with_wipe", "screen_only", "camera_only", "slate"]
+    },
+    "profile": {
+      "source": "requirements.md 20.4（エンコードプロファイル）・11.7",
+      "values": ["720p", "480p"]
+    },
+    "broadcast_state": {
+      "source": "requirements.md 20.4（配信レコードの状態）・25.1",
+      "values": ["reserved", "awaiting_media", "confirming", "live", "interrupted", "ended"]
+    },
+    "settlement_state": {
+      "source": "requirements.md 20.4（清算状態）・25.2",
+      "values": ["none", "pending", "settled", "abandoned"]
+    },
+    "end_reason": {
+      "source": "requirements.md 20.4（終了理由）",
+      "values": ["user_stop", "time_limit", "connection_lost", "youtube_ended", "authorization_revoked", "admin_stop", "start_timeout", "confirm_timeout", "prepare_failed", "prior_unsettled", "insufficient_bandwidth", "user_cancel", "relay_disconnect"]
+    },
+    "rejection_reason": {
+      "source": "requirements.md 20.4（開始の拒否理由）・9.2。配列の順が 9.2 の順 0〜13",
+      "note": "HTTP ステータスと区分は http-rejections.json。",
+      "values": ["invalid_input", "not_logged_in", "rate_limited", "bot_check_failed", "broadcast_in_progress", "youtube_not_connected", "authorization_revoked", "live_not_enabled", "allowance_consumed", "attempts_exhausted", "intake_paused", "transfer_budget_exceeded", "capacity_full", "quota_insufficient"]
+    },
+    "youtube_connection_state": {
+      "source": "requirements.md 20.4（YouTube 接続状態）・25.4",
+      "values": ["not_connected", "connected", "live_not_enabled", "revoked"]
+    },
+    "studio_state": {
+      "source": "requirements.md 20.4（スタジオの状態）・25.3",
+      "values": ["idle", "requesting", "connecting", "probing", "starting", "live", "degraded", "reconnecting", "stopping", "ended"]
+    },
+    "source_state": {
+      "source": "requirements.md 20.4（ソースの状態）・25.5",
+      "values": ["detached", "requesting", "active", "denied", "lost"]
+    },
+    "ws_message_type": {
+      "source": "requirements.md 20.4（転送メッセージ種別）・11.9。前の 7 種がブラウザ → 中継、後の 7 種が中継 → ブラウザ",
+      "note": "種別符号と方向は limits.json の ws_frame.types。",
+      "values": ["hello", "probe", "start", "video", "audio", "report", "end", "accepted", "probe_result", "ack", "keyframe_request", "throttle", "status", "fatal"]
+    },
+    "internal_call": {
+      "source": "requirements.md 20.4（内部通信の呼び出し）・11.9",
+      "values": ["verify", "provision", "heartbeat", "event"]
+    },
+    "broadcast_event_type": {
+      "source": "requirements.md 20.4（配信の出来事の種別）",
+      "values": ["accepted", "verified", "probe_done", "provision_started", "provision_done", "publish_started", "live_confirmed", "source_added", "source_lost", "fallback_switched", "bitrate_down", "bitrate_up", "video_dropped", "degraded_started", "degraded_cleared", "interrupted", "resumed", "throttle_directed", "keyframe_requested", "youtube_warning", "time_limit_notice", "ended", "settlement_succeeded", "settlement_failed"]
+    },
+    "usage_event_type": {
+      "source": "requirements.md 20.4（測定イベントの種別）・18 章",
+      "values": ["login_started", "login_completed", "connect_started", "connect_completed", "connect_failed", "capability_detected", "source_granted", "source_denied", "start_requested", "start_rejected", "line_measured", "prepared", "live_confirmed", "degraded", "reconnect_started", "reconnect_succeeded", "broadcast_ended", "watch_url_copied", "disconnected", "account_deleted"]
+    },
+    "setting_key": {
+      "source": "requirements.md 20.4（制限値・設定）・8 章",
+      "note": "既定値は limits.json の setting_defaults。",
+      "values": ["daily_allowance", "attempt_limit", "concurrent_limit", "time_limit_minutes", "intake_rate_per_hour", "monthly_transfer_budget_gb", "daily_quota_units", "bot_score_threshold", "intake_paused"]
+    },
+    "adaptive_condition": {
+      "source": "requirements.md 20.4（適応制御の条件）・12 章。配列の順が 12 章の表の 7 行の順",
+      "note": "しきい値と継続時間は limits.json の adaptive.conditions。",
+      "values": ["backlog_high_twice", "backlog_low_no_drop", "backlog_critical", "video_ack_stalled", "backlog_severe_sustained", "degraded_enter", "degraded_exit"]
+    },
+    "color_role": {
+      "source": "requirements.md 20.4（配色の役割）・17.2",
+      "note": "モックの配色（app-ui/tokens/colors.css ほか）は、デザインシステム veyra-gemini のトークンで、17.2 の 12 役割と値が一致しない。例：基底は 17.2 が #0F1115、モックが #080c18。アクセントは 17.2 が #3FB6A8、モックが #00fbff。文字（主）は 17.2 が #F2F4F8、モックが #f0f4ff。ライブと警告は、17.2 が #CE2C31・#F5A524、モックが Studio.dc.html の OKLCH（--live・--warn）。面（浮き）・区切り線・正常・フォーカスには、モックに 1 対 1 のトークンが無い。契約は 17.2 の値を正とする。差の扱い（CLAUDE.md の U11：既定でデザインシステムを優先する）は、フロントエンド基盤（#22）が決める。この値は、フロントエンドのコントラスト検査（17.2：文字 4.5:1・境界と図形 3:1）の参照用である。",
+      "values": ["base", "surface", "surface_raised", "divider", "control_border", "text_primary", "text_secondary", "accent", "live", "warning", "success", "focus"],
+      "attributes": {
+        "base": {"hex": "#0F1115"},
+        "surface": {"hex": "#171A21"},
+        "surface_raised": {"hex": "#1F2430"},
+        "divider": {"hex": "#2B3140"},
+        "control_border": {"hex": "#6B7488"},
+        "text_primary": {"hex": "#F2F4F8"},
+        "text_secondary": {"hex": "#A9B1C1"},
+        "accent": {"hex": "#3FB6A8", "on_hex": "#06201D"},
+        "live": {"hex": "#CE2C31", "on_hex": "#FFFFFF"},
+        "warning": {"hex": "#F5A524"},
+        "success": {"hex": "#46A758"},
+        "focus": {"hex": "#8AB4F8"}
+      }
+    },
+    "fatal_code": {
+      "source": "契約独自の列挙（#3）。ws-protocol.md の致命通知",
+      "values": ["message_too_large", "bitrate_exceeded", "hello_timeout", "invalid_ticket", "stale_epoch", "broadcast_ended", "protocol_violation", "heartbeat_lost", "publish_failed", "internal_error"]
+    },
+    "relay_event_kind": {
+      "source": "契約独自の列挙（#3）。internal-api.md の事象の種類",
+      "values": ["publish_started", "interrupted", "resumed", "publish_failed", "relay_disconnected", "session_ended"]
+    },
+    "interrupt_cause": {
+      "source": "契約独自の列挙（#3）。internal-api.md の事象（中断）の原因",
+      "values": ["browser_disconnected", "media_stalled", "rtmps_disconnected", "buffer_overflow"]
+    },
+    "browser_event_kind": {
+      "source": "契約独自の列挙（#3）。状態報告に載せる、ブラウザ側の出来事（配信の出来事の種別の部分集合）",
+      "values": ["source_added", "source_lost", "fallback_switched", "bitrate_down", "bitrate_up", "video_dropped", "degraded_started", "degraded_cleared"]
+    },
+    "connect_result": {
+      "source": "契約独自の列挙（#3）。YouTube 接続の結果（7.2）",
+      "values": ["connected", "live_not_enabled", "scope_denied", "no_refresh_token", "no_channel", "unverifiable"]
+    },
+    "login_error": {
+      "source": "契約独自の列挙（#3）。ログインの失敗の種類（7.1）",
+      "values": ["registration_held", "oauth_failed"]
+    },
+    "resolution": {
+      "source": "契約独自の列挙（#3）。拒否の「再試行で解消するか」の区分（9.2）",
+      "note": "拒否理由ごとの区分は http-rejections.json。",
+      "values": ["fix_input", "log_in", "wait", "stop_first", "connect", "reconnect", "enable_live", "next_usage_day", "after_release", "next_month", "next_quota_day"]
+    }
+  }
+}

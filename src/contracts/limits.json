@@ -1,0 +1,213 @@
+{
+  "$comment": "契約の制限値・間隔・閾値・固定値。キーは英小文字の snake_case で、単位を名前に含める（_kbps・_ms・_us・_seconds・_bytes・_minutes・_days）。文書用のキー（$comment・note・*_note）は、各層の定数モジュールへ複製しない。各層（Ruby・TypeScript・Go）の定数モジュールは、この JSON との一致をテストで保証する（src/contracts/README.md）。値の出どころは、各セクションのコメントに挙げる requirements.md の節。",
+  "profiles": {
+    "720p": {
+      "width": 1280,
+      "height": 720,
+      "framerate": 30,
+      "video_bitrate_min_kbps": 3000,
+      "video_bitrate_initial_kbps": 4500,
+      "video_bitrate_max_kbps": 6000,
+      "line_threshold_kbps": 4100
+    },
+    "480p": {
+      "width": 854,
+      "height": 480,
+      "framerate": 30,
+      "video_bitrate_min_kbps": 800,
+      "video_bitrate_initial_kbps": 1500,
+      "video_bitrate_max_kbps": 2500,
+      "line_threshold_kbps": 1200
+    },
+    "profiles_note": "11.7 のエンコードプロファイル（キーは列挙 profile の値）と、11.8 の回線の閾値。line_threshold_kbps は（映像ビットレート下限 + 音声ビットレート）の 1.3 倍を 100 kbps 単位に丸めた値で、実効スループットがこの値以上ならそのプロファイル。最も小さい閾値（1,200 kbps）を下回れば回線不足。映像ビットレートの開始値は、min(初期値, 実効スループット × line_probe.start_bitrate_throughput_ratio) で、下限を下回らない。POST /api/broadcasts の応答の limits.profiles は、このオブジェクトをそのまま返す。"
+  },
+  "video": {
+    "codec_main": "avc1.4D401F",
+    "codec_constrained_baseline": "avc1.42E01F",
+    "keyframe_interval_seconds": 2,
+    "codec_note": "11.7。H.264 Main（Level 3.1）の WebCodecs のコーデック文字列が codec_main。Main が使えない環境では Constrained Baseline（Level 3.1）を使う（11.7）。codec_constrained_baseline は、設計メモに値が無く、契約が追加した（Constrained Baseline・Level 3.1 のコーデック文字列 avc1.42E01F は、Chromium の WebCodecs で使えることを実測で確認した）。開始通知の video.codec は、この 2 つのどちらか。"
+  },
+  "audio": {
+    "codec": "mp4a.40.2",
+    "sample_rate_hz": 44100,
+    "channels": 2,
+    "bitrate_kbps": 128,
+    "samples_per_video_frame": 1470,
+    "audio_note": "11.5・11.6・11.7。AAC-LC・44.1 kHz・2 ch・128 kbps。映像 1 フレーム = 音声 1,470 サンプル（44,100 ÷ 30）。"
+  },
+  "line_probe": {
+    "duration_seconds": 3,
+    "max_rate_kbps": 6000,
+    "message_bytes_hint": 32768,
+    "start_bitrate_throughput_ratio": 0.75,
+    "line_probe_note": "11.8。ブラウザは duration_seconds の間、max_rate_kbps 相当の計測用データを送る。message_bytes_hint は 1 メッセージの大きさの目安（32 KB 程度）で、上限は ws_frame.max_message_bytes。"
+  },
+  "adaptive": {
+    "evaluation_interval_ms": 1000,
+    "target_change_min_interval_ms": 1000,
+    "encoder_queue_max_frames": 2,
+    "conditions": {
+      "backlog_high_twice": {
+        "backlog_over_ms": 1500,
+        "consecutive_evaluations": 2,
+        "decrease_percent": 30
+      },
+      "backlog_low_no_drop": {
+        "backlog_under_ms": 300,
+        "no_drop_window_seconds": 10,
+        "increase_percent": 10
+      },
+      "backlog_critical": {
+        "backlog_over_ms": 4000
+      },
+      "video_ack_stalled": {
+        "stalled_seconds": 10
+      },
+      "backlog_severe_sustained": {
+        "backlog_over_ms": 8000,
+        "duration_seconds": 10
+      },
+      "degraded_enter": {
+        "backlog_over_ms": 1500,
+        "duration_seconds": 20
+      },
+      "degraded_exit": {
+        "backlog_at_most_ms": 1500,
+        "duration_seconds": 10
+      }
+    },
+    "adaptive_note": "12 章。conditions のキーは列挙 adaptive_condition の値（12 章の表の 7 行の順）。_over_ms は「超える」（>）、_under_ms は「未満」（<）、_at_most_ms は「以下」（<=）。evaluation_interval_ms は毎秒の評価、target_change_min_interval_ms は目標ビットレートの変更の間隔の下限（1 秒に 1 回まで）、encoder_queue_max_frames はエンコーダの入力待ちが超えたら捨てるフレーム数（11.7）。"
+  },
+  "ws_frame": {
+    "magic": [66, 76],
+    "version": 1,
+    "header_bytes": 17,
+    "header_fields": {
+      "magic": { "offset": 0, "length": 2 },
+      "version": { "offset": 2, "length": 1 },
+      "type": { "offset": 3, "length": 1 },
+      "attributes": { "offset": 4, "length": 1 },
+      "timestamp_us": { "offset": 5, "length": 8 },
+      "body_length": { "offset": 13, "length": 4 }
+    },
+    "keyframe_attribute_bit": 0,
+    "max_message_bytes": 2097152,
+    "directions": ["browser_to_relay", "relay_to_browser"],
+    "types": {
+      "hello": { "code": 1, "direction": "browser_to_relay" },
+      "probe": { "code": 2, "direction": "browser_to_relay" },
+      "start": { "code": 3, "direction": "browser_to_relay" },
+      "video": { "code": 4, "direction": "browser_to_relay" },
+      "audio": { "code": 5, "direction": "browser_to_relay" },
+      "report": { "code": 6, "direction": "browser_to_relay" },
+      "end": { "code": 7, "direction": "browser_to_relay" },
+      "accepted": { "code": 129, "direction": "relay_to_browser" },
+      "probe_result": { "code": 130, "direction": "relay_to_browser" },
+      "ack": { "code": 131, "direction": "relay_to_browser" },
+      "keyframe_request": { "code": 132, "direction": "relay_to_browser" },
+      "throttle": { "code": 133, "direction": "relay_to_browser" },
+      "status": { "code": 134, "direction": "relay_to_browser" },
+      "fatal": { "code": 135, "direction": "relay_to_browser" }
+    },
+    "ws_frame_note": "11.9。バイト順はビッグエンディアン。ヘッダ 17 バイト = 識別子 2（magic = 0x42 0x4C）・版 1・種別 1・属性 1（bit0 = キーフレーム）・時刻 8（マイクロ秒）・本文長 4。types のキーは列挙 ws_message_type の値。code は 10 進数（ws-protocol.md は 16 進数で書く：hello = 0x01 〜 end = 0x07、accepted = 0x81 〜 fatal = 0x87）。max_message_bytes は 1 メッセージ（ヘッダ + 本文）の上限 2 MiB。"
+  },
+  "relay": {
+    "hello_timeout_seconds": 10,
+    "ingress_bitrate_limit_factor": 1.5,
+    "ingress_bitrate_window_seconds": 10,
+    "ingress_bitrate_limit_probe_profile": "720p",
+    "media_stall_seconds": 5,
+    "heartbeat_interval_seconds": 2,
+    "heartbeat_lost_stop_seconds": 60,
+    "egress_buffer_limit_ms": 3000,
+    "egress_throttle_ms": 1500,
+    "ack_interval_ms": 500,
+    "report_interval_ms": 1000,
+    "relay_note": "11.9・11.10。受信ビットレートの上限 = プロファイルの映像ビットレートの上限 × ingress_bitrate_limit_factor（ingress_bitrate_window_seconds の平均。計測中はプロファイル未確定のため ingress_bitrate_limit_probe_profile の上限を使う）。media_stall_seconds の間フレームが届かなければ中断。heartbeat_lost_stop_seconds の間、心拍の応答が得られなければ、中継は自ら送出を止める。送出待ちは egress_buffer_limit_ms が上限で、egress_throttle_ms を超えたら抑制指示を送る。ack_interval_ms は受領応答、report_interval_ms は状態報告の間隔。"
+  },
+  "tickets": {
+    "ttl_seconds": 60,
+    "tickets_note": "11.9。接続チケットは ttl_seconds で失効し、1 回の照合で消費される。"
+  },
+  "deadlines": {
+    "reserved_seconds": 90,
+    "awaiting_media_seconds": 30,
+    "confirming_seconds": 120,
+    "interrupted_relay_notified_seconds": 30,
+    "interrupted_heartbeat_lost_seconds": 75,
+    "heartbeat_lost_detect_seconds": 10,
+    "max_resumes": 10,
+    "live_confirm_poll_interval_seconds": 5,
+    "live_check_interval_seconds": 300,
+    "deadline_monitor_max_interval_seconds": 5,
+    "reconnect_backoff_cap_ms": 5000,
+    "time_limit_notice_before_seconds": 300,
+    "settlement_retry_delays_seconds": [60, 120, 240],
+    "deadlines_note": "13.2・10.4・8.3。reserved_seconds・awaiting_media_seconds・confirming_seconds は、受理済み・送出待ち・確定待ちの期限。interrupted_relay_notified_seconds は中継が中断を通知した場合、interrupted_heartbeat_lost_seconds は心拍が heartbeat_lost_detect_seconds 途絶した場合の、中断の期限。max_resumes は 1 配信あたりの復帰の上限。live_confirm_poll_interval_seconds はライブ確定の確認（最長 confirming_seconds）、live_check_interval_seconds はライブ中の定期確認の間隔。deadline_monitor_max_interval_seconds は期限監視の間隔の上限。reconnect_backoff_cap_ms は再接続の待機（指数的に増やす）の上限で、初期値と倍率は契約に含めない。time_limit_notice_before_seconds は時間上限の予告の前倒し。settlement_retry_delays_seconds は清算の再試行の間隔（最大 3 回）。"
+  },
+  "quota": {
+    "common_units": 500,
+    "safety_margin_units": 500,
+    "broadcast_usable_units_at_default": 9000,
+    "broadcast_reservation_units": 550,
+    "prep_reservation_units": 340,
+    "settle_reservation_units": 210,
+    "unit_costs": {
+      "list": 1,
+      "insert": 50,
+      "update": 50,
+      "bind": 50,
+      "transition": 50,
+      "delete": 50
+    },
+    "unit_costs_note": "単価の出どころは https://developers.google.com/youtube/v3/determine_quota_cost の表（最終更新 2026-09-15）。liveBroadcasts・liveStreams の各メソッドのページには Quota impact の行が無いため、単価はこの表による。list は一覧取得、insert は作成、update は更新、bind は紐づけ、transition は遷移、delete は削除。失敗した呼び出しの実費は文書に最低 1 とあるのみで、満額を記帳するのは安全側（安全余裕 500 で吸収する）。",
+    "quota_note": "8.4。1 日の割り当ては設定 daily_quota_units（setting_defaults。既定 10,000）。共通枠・安全余裕・配信 1 本の予約とその内訳は固定値。broadcast_usable_units_at_default = daily_quota_units（既定）− common_units − safety_margin_units。broadcast_reservation_units = prep_reservation_units（準備・確認枠）+ settle_reservation_units（終了・清算枠）。"
+  },
+  "rtmps_ingest": {
+    "scheme": "rtmps",
+    "hosts": ["a.rtmps.youtube.com", "b.rtmps.youtube.com"],
+    "port": 443,
+    "userinfo_allowed": false,
+    "query_allowed": false,
+    "note": "RTMPS の送出先の許可（10.1・28.1）。許可するのは、スキームが rtmps で、ホストが hosts のいずれかで、ポートが 443 のもの。ユーザー情報（user:pass@）とクエリ（バックアップの ?backup=1 など）を持つものは許可しない。公式に許可ホストの列挙が無く、hosts は二次情報（OBS Studio の YouTube RTMPS プリセットの a.rtmps.youtube.com・b.rtmps.youtube.com）による。最初の実機で、準備の応答（rtmpsIngestionAddress）のホストを採取して確定する（OBS のプリセットの出どころ：https://raw.githubusercontent.com/obsproject/obs-studio/master/plugins/rtmp-services/data/services.json。YouTube の公式の説明：https://developers.google.com/youtube/v3/live/guides/rtmps-ingestion は、プロトコルが rtmps・ポートが 443 であることだけを定める。GPT のファクトチェックは未実施。CLAUDE.md の U5）。アプリケーション（#10）と中継（#19）は、この値を各自の設定に持つ。"
+  },
+  "dev_ingest": {
+    "scheme": "rtmps",
+    "host": "fake-ingest",
+    "port": 1935,
+    "tls": "self_signed",
+    "allowed_environments": ["development", "test"],
+    "note": "開発用の疑似の取り込み口（#30 の fake-ingest）。開発・テストの環境でのみ許可し、production には存在しない。TLS の証明書は自己署名のため、このホストに限り証明書の検証を省略できる。アプリケーションの疑似の窓口（#10）が返す取り込み先と、中継の送出先の許可（#19）は、この値を使う。"
+  },
+  "rate_limits": {
+    "login_start": { "scope": "ip", "limit": 30, "window_seconds": 3600 },
+    "connect_start": { "scope": "ip", "limit": 30, "window_seconds": 3600 },
+    "recheck_per_minute": { "scope": "account", "limit": 1, "window_seconds": 60 },
+    "recheck_per_day": { "scope": "account", "limit": 20, "window_seconds": 86400 },
+    "intake": { "scope": "account", "limit_setting": "intake_rate_per_hour", "window_seconds": 3600 },
+    "rate_limits_note": "28.1・7.2。計数はアプリケーションのプロセス内に保持する。login_start・connect_start は IP 単位（固定値）で、別々の計数。recheck_per_day の 1 日は、直近 24 時間（86,400 秒）とする（仮置き：要件は暦日か直近 24 時間かを定めていない）。intake は受付要求（POST /api/broadcasts）の頻度で、上限は設定 limit_setting の値（既定 10 回 / 時）。"
+  },
+  "retention": {
+    "youtube_broadcast_id_days_after_end": 30,
+    "health_samples_days": 30,
+    "broadcast_events_days": 30,
+    "relay_ticket_days_after_expiry": 1,
+    "session_days_after_last_use": 30,
+    "stream_id_days_after_last_verified": 30,
+    "channel_title_memory_max_minutes": 10,
+    "retention_note": "20.3。YouTube の配信識別子は配信の終了から、接続チケットは失効から、セッションは最終利用から、ストリーム識別子は最後の確認から、それぞれ数える。チャンネル名はメモリにのみ、最長 channel_title_memory_max_minutes 分だけ保持する（永続化しない）。"
+  },
+  "setting_defaults": {
+    "daily_allowance": 1,
+    "attempt_limit": 3,
+    "concurrent_limit": 3,
+    "time_limit_minutes": 60,
+    "intake_rate_per_hour": 10,
+    "monthly_transfer_budget_gb": 10,
+    "daily_quota_units": 10000,
+    "bot_score_threshold": 0.5,
+    "bot_score_threshold_note": "仮置き（CLAUDE.md の U4）。requirements.md に既定値の定めが無いため、reCAPTCHA v3 で一般に目安とされる値（Google の文書 https://developers.google.com/recaptcha/docs/v3 が、閾値の既定を 0.5 とする）を置く。運用で実測してから見直す。設定値（system_settings）で変えられる。requirements.md の 8 章・19 章への追記は #5 で行う。",
+    "intake_paused": false,
+    "setting_defaults_note": "8 章。キーは列挙 setting_key の値（順も同じ）。管理画面から変えられる設定の、既定値。"
+  }
+}
