@@ -1,0 +1,4 @@
+# ビルドの文脈（docker build）へ入れないもの
+.cache
+bin
+.env*

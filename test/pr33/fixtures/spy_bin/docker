@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# test/pr33 用の偽の docker。PATH の先頭に置き、本物の docker の代わりに呼ばれる。
+# 何も実行せず、呼ばれた事実（引数）を、環境変数 PR33_SPY_LOG のファイルへ 1 行追記し、終了コード 97 で終わる。
+# 呼ばれなかったこと（= 拒否が docker の手前で働いたこと）を、ログの行数で確かめるために使う。
+# （scripts/tests/fixtures/bin/docker は、標準出力へ書く方式。こちらは、標準出力が捨てられても検出できるよう、ファイルへ書く）
+printf '%s\n' "$*" >>"${PR33_SPY_LOG:?PR33_SPY_LOG が指定されていません}"
+echo "PR33_SPY_DOCKER_CALLED"
+exit 97

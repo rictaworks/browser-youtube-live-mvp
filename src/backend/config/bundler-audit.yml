@@ -1,0 +1,3 @@
+# Audit all gems listed in the Gemfile for known security problems by running bin/bundler-audit.
+# アプリケーションに関係しない CVE だけを、理由を添えて ignore に書く。現在は無い。
+ignore: []

@@ -1,0 +1,20 @@
+# PostgreSQL。接続先は環境変数 DATABASE_URL から与える（requirements.md 29.4）。
+#   開発  docker-compose.yml が bl_development の URL を与える
+#   テスト scripts/test_backend.sh が、テスト用 DB（既定 bl_test。TEST_DB_NAME で変更できる）の URL を与える
+#   本番  Railway が与える URL（データベース名を含む）
+# DATABASE_URL が与えられると、その URL が、この database の名前より優先される。
+default: &default
+  adapter: postgresql
+  encoding: unicode
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
+
+development:
+  <<: *default
+  database: bl_development
+
+test:
+  <<: *default
+  database: bl_test
+
+production:
+  <<: *default

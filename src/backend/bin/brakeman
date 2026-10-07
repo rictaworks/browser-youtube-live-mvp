@@ -1,0 +1,8 @@
+#!/usr/bin/env ruby
+require "rubygems"
+require "bundler/setup"
+
+# Rails の雛形にある `--ensure-latest`（最新版でなければ失敗する）は付けない。
+# 新しい版が出た日に、コードを変えていなくてもテストが失敗するのを避ける（版は Gemfile.lock で固定する）。
+
+load Gem.bin_path("brakeman", "brakeman")

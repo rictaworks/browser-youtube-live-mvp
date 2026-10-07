@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# scripts/ のテスト用に、本物の docker の代わりに PATH の先頭へ置く偽の docker。
+# 何も実行せず、受け取った引数と、dc.sh が渡した環境変数を標準出力へ書くだけである。
+# 終了コードは、環境変数 FAKE_DOCKER_EXIT（既定 0）。
+echo "FAKE_DOCKER_ARGS=$*"
+echo "FAKE_DOCKER_HOST_UID=${HOST_UID:-unset}"
+echo "FAKE_DOCKER_HOST_GID=${HOST_GID:-unset}"
+echo "FAKE_DOCKER_COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-unset}"
+echo "FAKE_DOCKER_FRONTEND_PORT=${FRONTEND_PORT:-unset}"
+echo "FAKE_DOCKER_BACKEND_PORT=${BACKEND_PORT:-unset}"
+echo "FAKE_DOCKER_RELAY_PORT=${RELAY_PORT:-unset}"
+exit "${FAKE_DOCKER_EXIT:-0}"

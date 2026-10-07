@@ -1,0 +1,28 @@
+source "https://rubygems.org"
+
+# Ruby は 3.4 系（Dockerfile の ruby:3.4-slim）。ここに ruby の指定を書くと、Gemfile.lock に
+# Ruby のパッチ版が記録され、イメージの更新のたびに Gemfile.lock が書き換わるため、書かない。
+gem "rails", "~> 8.1.3", ">= 8.1.3.1"
+
+# json 3.0 系は、activesupport 8.1 の ActiveSupport::JSON.decode（位置引数でオプションを渡す実装）と
+# 非互換になり得る（JSON ボディを持つ全リクエストが壊れる）。2 系に固定する。
+gem "json", "~> 2.9"
+
+gem "pg", "~> 1.1"
+gem "puma", ">= 5.0"
+
+# Windows には zoneinfo が無いため、tzinfo-data を入れる（docker compose の開発環境では使われない）
+gem "tzinfo-data", platforms: %i[ windows jruby ]
+
+group :development, :test do
+  gem "rspec-rails"
+
+  # 既知の脆弱性を持つ gem を検知する（無視する CVE は config/bundler-audit.yml に書く）
+  gem "bundler-audit", require: false
+
+  # セキュリティの静的解析
+  gem "brakeman", require: false
+
+  # Omakase Ruby styling
+  gem "rubocop-rails-omakase", require: false
+end
