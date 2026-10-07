@@ -12,8 +12,8 @@ Rails.application.configure do
   # Show full error reports.
   config.consider_all_requests_local = true
 
-  # docker compose の他のコンテナ（frontend・relay）が、サービス名（backend）で呼ぶ。Host が backend の要求を許可する
-  config.hosts << "backend"
+  # 許可するホスト（localhost・backend。docker compose の他のコンテナ（frontend・relay）が、サービス名 backend で呼ぶ）は、
+  # config/allowed_hosts.rb が持ち、config/application.rb が config.hosts へ入れる（環境ごとの一覧を、1 か所に集める）
 
   # Enable server timing.
   config.server_timing = true
