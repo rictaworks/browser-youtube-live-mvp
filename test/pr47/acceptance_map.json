@@ -1,0 +1,228 @@
+{
+  "$comment": "issue #19 の受け入れ条件と、それを確かめるテスト（Go のテスト関数の名前）の対応。check_acceptance.py が、go test -json の結果と突き合わせ、列挙したテストがすべて成功していることを確かめる（名前の変更・削除・スキップを検知する）。",
+  "criteria": [
+    {
+      "id": "flv-bytes",
+      "text": "多重化: VideoConfig・Video・AudioConfig・Audio・Metadata が、RTMP のメッセージ本体のバイト列を返す。符号化データはそのままコピーし、中身を書き換えない（入力のバイト列が出力に連続して含まれる）。構成時間は 0",
+      "tests": [
+        "TestVideoConfigBody",
+        "TestVideoFrameBody",
+        "TestAudioConfigBody",
+        "TestAudioFrameBody",
+        "TestOutputDoesNotShareMemoryWithInput",
+        "TestInputsAreNotModified",
+        "TestPayloadsAreCopiedThroughUnchanged",
+        "FuzzMuxerRoundTrip"
+      ]
+    },
+    {
+      "id": "flv-metadata",
+      "text": "onMetaData: 幅・高さ・フレームレート・映像のビットレート・音声のビットレート・音声のサンプリング周波数・ステレオ・コーデック ID（H.264 = 7、AAC = 10）。値は start のメッセージから",
+      "tests": [
+        "TestMetadataBody",
+        "TestMetadataValidation",
+        "TestCodecIDs"
+      ]
+    },
+    {
+      "id": "flv-order",
+      "text": "映像設定・音声設定と準備の結果がそろうまで publish を開始しない（呼び出し順の制約を型・状態で表し、違反は例外）。復号器設定は最初のメディアフレームより前に送る。再接続のあとは設定を再送する",
+      "tests": [
+        "TestMuxerCallOrder",
+        "TestNotReadyErrorNamesWhatIsMissing",
+        "TestFailedCallsKeepTheStateUnchanged"
+      ]
+    },
+    {
+      "id": "flv-validation",
+      "text": "復号器設定の最小限の検査（AVCDecoderConfigurationRecord の版・AudioSpecificConfig の長さ）。不正は明示的なエラー。H.264 の NAL の内容は検査しない",
+      "tests": [
+        "TestVideoConfigValidation",
+        "TestAudioConfigValidation",
+        "TestEmptyFramesAreRejected"
+      ]
+    },
+    {
+      "id": "flv-roundtrip",
+      "text": "単体テスト: go-flv のデコーダで往復し、タグの種別・フレームの種別・パケットの種別・本文が期待どおり",
+      "tests": [
+        "TestVideoConfigBody",
+        "TestVideoFrameBody",
+        "TestAudioConfigBody",
+        "TestAudioFrameBody",
+        "TestMetadataBody",
+        "FuzzMuxerRoundTrip"
+      ]
+    },
+    {
+      "id": "flv-concurrent",
+      "text": "映像・音声を別のゴルーチンから並行に呼べる（Muxer）",
+      "tests": [
+        "TestMuxerIsSafeForConcurrentUse"
+      ]
+    },
+    {
+      "id": "destination-validate",
+      "text": "Validate: スキームが rtmps（平文の rtmp は拒否）・ホストが許可リストに一致・ポートが 443（それ以外は拒否）・ユーザー情報・クエリ（?backup=1 を含む）・過大なパスを含まない。違反は型付きエラー。ストリームキーは URL と分けて受け取る",
+      "tests": [
+        "TestValidateAcceptsYouTubeIngestInProduction",
+        "TestValidateRejects",
+        "TestValidationErrorsDoNotEchoTheInput",
+        "FuzzValidate",
+        "TestNewPolicy",
+        "TestValidateWithAnInjectedPolicy",
+        "TestValidateWithAnEmptyPolicyRejectsEverything",
+        "TestPolicyTargetsReturnsACopy"
+      ]
+    },
+    {
+      "id": "destination-dev",
+      "text": "開発用の許可: GIN_MODE が production でないときに限り、開発用の許可ホスト（契約 dev_ingest）を追加で許可し、そのホストに限り TLS の証明書検証を省略できる。production ではこの許可が存在しない。環境変数の名前を増やさない",
+      "tests": [
+        "TestValidateInDevelopmentAndTest",
+        "TestProductionHasNoDevelopmentAllowance",
+        "TestPolicyForGinMode",
+        "TestPolicyForRejectsAnUnknownEnvironment",
+        "TestPolicyIsBuiltFromTheContract",
+        "TestDialVerifiesTheServerCertificate",
+        "TestTLSConfigFor",
+        "TestRtmpsSourcesFollowTheRules"
+      ]
+    },
+    {
+      "id": "destination-type",
+      "text": "利用者の入力から宛先を組み立てる経路が存在しない（型で ValidatedDestination を要求する）",
+      "tests": [
+        "TestZeroValidatedDestinationIsInvalid",
+        "TestDialRejectsInvalidArgumentsBeforeTouchingTheNetwork",
+        "TestValidatedDestinationIsRedactedWhenFormatted"
+      ]
+    },
+    {
+      "id": "dial",
+      "text": "Dial: TLS（SNI はホスト名・TLS 1.2 以上・証明書の検証あり）-> connect（アプリ名は URL のパス）-> createStream -> publish（live）。接続全体を期限で閉じる監視（接続・ハンドシェイクのタイムアウト）",
+      "tests": [
+        "TestPublisherDeliversMuxerOutputToTheReceiver",
+        "TestTLSConfigFor",
+        "TestDialVerifiesTheServerCertificate",
+        "TestDialTimesOutWhenTheReceiverNeverAnswersTheRTMPHandshake",
+        "TestDialTimesOutDuringTheTLSHandshake",
+        "TestDialTimesOutWhenConnectIsNeverAnswered",
+        "TestDialFailsFastWhenTheReceiverClosesWhileConnecting",
+        "TestDialReportsARejectedConnect",
+        "TestDialIsCanceledByTheCaller",
+        "TestDialHonorsTheCallersDeadline",
+        "TestDialWithACanceledContextDoesNotConnect",
+        "TestConfigNormalize",
+        "TestKillSwitchKeepsTheSocketAliveUntilReleased",
+        "TestKillSwitchShutdownBreaksTheConnectionAndReleasesABlockedReader",
+        "TestKillSwitchClosesTheSocketsOfFailedAttempts",
+        "TestKillSwitchRefusesNewSocketsAfterTheRelease",
+        "TestKillSwitchRefusesNewSocketsAfterTheShutdown",
+        "TestKillSwitchIsSafeToUseAfterTheRelease"
+      ]
+    },
+    {
+      "id": "queue",
+      "text": "WriteVideo・WriteAudio・WriteMeta: 非同期の送出キューを持ち、書き込みの呼び出し元をブロックしない。PendingMs() を返す。3 秒分の上限に達したら ErrBufferOverflow（バッファを破棄）",
+      "tests": [
+        "TestPublisherDeliversEverythingInOrder",
+        "TestWritesDoNotBlockWhenTheSinkIsStalled",
+        "TestPendingMsIsTheWidthBetweenTheLastQueuedAndTheLastSentTimes",
+        "TestOverflowBoundary",
+        "TestOverflowDiscardsTheBufferAndClosesThePublisher",
+        "TestNoOverflowWhileTheSinkKeepsUp",
+        "TestMetaMessagesDoNotCountTowardsTheLimit",
+        "TestOverflowByBytesWhenTimestampsDoNotAdvance",
+        "TestInvalidMessagesAreRejectedWithoutClosing",
+        "TestBufferOverflowWhenTheReceiverStopsReading",
+        "TestNoOverflowWhenTheReceiverKeepsUp"
+      ]
+    },
+    {
+      "id": "closed",
+      "text": "切断を検知したら Closed() が通知し、以後の書き込みは ErrClosed。publish 直後の切断を ErrPublishRejected として返す（onStatus ではなく接続の切断で検知する）",
+      "tests": [
+        "TestSinkWriteFailureClosesThePublisher",
+        "TestDisconnectIsDetectedWithoutAnyWrite",
+        "TestDisconnectRightAfterPublishIsClassifiedAsRejected",
+        "TestDisconnectAfterTheWindowIsAPlainDisconnect",
+        "TestServerDisconnectIsDetected",
+        "TestRejectedPublishIsReportedAsPublishRejected",
+        "TestRedialAfterTheConnectionDropped"
+      ]
+    },
+    {
+      "id": "close-abort",
+      "text": "Close(): 送出待ちを送り切ってから RTMPS を切断する（送信側を閉じ、受け口が閉じるのを CloseLinger まで待つ。読んでいない受信を残したまま閉じて、RST で最後の部分を捨てさせない。後始末の待ちは有限）。強制の Abort()（バッファを破棄して切断）も持つ。配信キーとバッファは終了時に破棄する",
+      "tests": [
+        "TestCloseSendsEverythingPendingBeforeClosing",
+        "TestCloseGivesUpAfterTheTimeoutWhenTheSinkIsStalled",
+        "TestAbortDiscardsTheBufferAndDropsTheConnection",
+        "TestCloseIsIdempotentAndSafeToCallConcurrently",
+        "TestCloseWithNothingPending",
+        "TestCloseReturnsTheConnectionCloseError",
+        "TestCloseDeliversEverythingOverTheWire",
+        "TestAbortReleasesAStalledWriterImmediately",
+        "TestNoGoroutinesRemainAfterAnyKindOfClose",
+        "TestPublisherCloseWaitsForTheReceiverToClose",
+        "TestPublisherCloseStopsWaitingForAReceiverThatDoesNotClose",
+        "TestCloseReturnsTeardownTimeoutWhenTheSinkNeverFinishesClosing",
+        "TestTeardownBudgetIncludesTheLinger",
+        "TestKillSwitchFinishDeliversEverythingThatWasWritten",
+        "TestKillSwitchFinishWaitsForThePeerOnlyUpToTheLinger",
+        "TestKillSwitchFinishReturnsAsSoonAsThePeerCloses",
+        "TestKillSwitchFinishStopsWaitingWhenTheConnectionIsReset",
+        "TestKillSwitchFinishDoesNotWaitAfterAShutdown",
+        "TestKillSwitchShutdownIsNotBlockedByAFinishThatIsWaiting",
+        "TestKillSwitchFinishIsSafeToCallRepeatedly"
+      ]
+    },
+    {
+      "id": "stream-key",
+      "text": "配信キーを、エラー・ログ・String()・%v に出さない（メモリ以外へ出さない。ファイルへ保存しない）",
+      "tests": [
+        "TestStreamKeyValidate",
+        "TestStreamKeyErrorDoesNotContainAnyPartOfTheKey",
+        "TestStreamKeyIsRedactedWhenFormatted",
+        "TestStreamKeyIsRedactedInStructuredOutput",
+        "TestStreamKeyCanBeDecodedFromJSON",
+        "TestStreamKeyNeverAppearsInErrorsOrLogs",
+        "TestPublisherFormatting",
+        "TestRtmpsSourcesFollowTheRules"
+      ]
+    },
+    {
+      "id": "concurrent",
+      "text": "並行に呼べる（映像・音声・メタを別のゴルーチンから）。単一の書き込みゴルーチン（キュー）で実現し、Stream.Write を複数のゴルーチンから直接呼ばない。-race で緑",
+      "tests": [
+        "TestConcurrentWriters",
+        "TestConcurrentWritersOverRTMPS",
+        "TestPublisherRandomizedOperations"
+      ]
+    },
+    {
+      "id": "integration",
+      "text": "統合テスト: go-rtmp のサーバー（TLS・自己署名）を受け口に、映像・音声・メタデータが時刻つきで届く／送出待ちの上限／受け口が切断した場合の Closed()／Close() が送り切る／配信キーがエラー・ログに現れない。テストでは許可リストを注入できる",
+      "tests": [
+        "TestPublisherDeliversMuxerOutputToTheReceiver",
+        "TestBufferOverflowWhenTheReceiverStopsReading",
+        "TestServerDisconnectIsDetected",
+        "TestCloseDeliversEverythingOverTheWire",
+        "TestStreamKeyNeverAppearsInErrorsOrLogs",
+        "TestValidateWithAnInjectedPolicy",
+        "TestPublisherCloseWaitsForTheReceiverToClose"
+      ]
+    },
+    {
+      "id": "quality",
+      "text": "core/ を参照のみ（core/ から internal/ を参照しない）。グローバル変数・日本語の直書き・平文の rtmp が無い",
+      "tests": [
+        "TestFlvSourcesFollowTheRules",
+        "TestRtmpsSourcesFollowTheRules",
+        "TestScannerFindsViolations",
+        "TestScannerCountsRevealCalls"
+      ]
+    }
+  ]
+}
