@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# test/pr33 用の偽の id。root で実行されたことを装う（scripts/dc.sh の「root では実行しない」を確かめるため）。
+# -u・-g だけ 0 を返し、それ以外は本物の id へ渡す。
+case "${1:-}" in
+  -u | -g) echo 0 ;;
+  *) exec /usr/bin/id "$@" ;;
+esac

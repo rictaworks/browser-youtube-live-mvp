@@ -1,0 +1,12 @@
+# Omakase Ruby styling for Rails
+inherit_gem: { rubocop-rails-omakase: rubocop.yml }
+
+AllCops:
+  # Dockerfile の ruby:3.4-slim に合わせる（指定しないと、古い Ruby 2.7 の構文として解析される）
+  TargetRubyVersion: 3.4
+
+# Overwrite or add rules to create your own house style
+#
+# # Use `[a, [b, c]]` not `[ a, [ b, c ] ]`
+# Layout/SpaceInsideArrayLiteralBrackets:
+#   Enabled: false

@@ -1,0 +1,9 @@
+# ビルドの文脈（docker build）へ入れないもの。機密と、コンテナが作る依存・キャッシュ・ログ
+.cache
+.bundle
+vendor/bundle
+log/*
+tmp/*
+.env*
+config/master.key
+config/credentials/*.key

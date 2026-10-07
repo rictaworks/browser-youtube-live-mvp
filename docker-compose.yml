@@ -1,0 +1,167 @@
+# 開発環境の docker compose。必ず scripts/dc.sh 経由で呼ぶ。
+#   - ホストの UID・GID を HOST_UID・HOST_GID として渡す（コンテナはその UID・GID で動き、root 所有のファイルを作らない）
+#   - 削除につながる操作を拒否する（拒否する操作は scripts/dc.sh を参照。CLAUDE.md「削除系コマンドの禁止」）
+# 事前に scripts/setup_dev_env.sh で .env を生成する。値は .env から読み、ここへは書かない（requirements.md 28.1・29.4）。
+#
+# サービス      db（PostgreSQL）・backend（Rails）・relay（Gin）・frontend（Next.js）
+# ホストへ公開  frontend 3000・backend 3001（公開側）・relay 3002
+#               並行して複数の環境を起動するときは、環境変数 FRONTEND_PORT・BACKEND_PORT・RELAY_PORT で変えられる
+#               （既定は上の値）。RELAY_PORT を変えたら、.env の RELAY_PUBLIC_URL も合わせる。
+#               プロジェクト名（コンテナ・ネットワーク・db のボリュームの名前）は COMPOSE_PROJECT_NAME で変えられる
+# 公開しない    db（backend だけが接続する）・backend の内部通信の口 3101（compose のネットワークの中だけで受ける）
+#
+# /contracts  src/contracts を、すべてのサービスへ読み取り専用でマウントする（3 層の契約。中身は別の issue）
+# /scripts    scripts/container を、backend・relay・frontend へ読み取り専用でマウントする（scripts/test_*.sh がコンテナの中で実行する）
+#
+# 依存パッケージの置き場（各層のディレクトリ内。gitignore 済み）
+#   backend   src/backend/vendor/bundle（gem）・src/backend/.cache（HOME・bundler の設定）
+#   frontend  src/frontend/node_modules
+#   relay     src/relay/.cache（HOME・Go のモジュールとビルドのキャッシュ・開発用のバイナリ）
+# HOME が無い UID でも動くよう、ツールの書き込み先を環境変数で明示する。
+# frontend の npm のキャッシュだけは、Next.js の開発サーバーのファイル監視に入らないよう、コンテナの /tmp に置く。
+name: browser-youtube-live-mvp
+
+x-host-user: &host-user "${HOST_UID:?scripts/dc.sh 経由で実行してください}:${HOST_GID:?scripts/dc.sh 経由で実行してください}"
+
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?scripts/setup_dev_env.sh を実行してください}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?scripts/setup_dev_env.sh を実行してください}
+      POSTGRES_DB: bl_development
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./src/contracts:/contracts:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --quiet --username=\"$${POSTGRES_USER}\" --dbname=bl_development"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./src/backend
+    user: *host-user
+    init: true
+    working_dir: /app
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-3001}:3001"
+    # 内部通信の口（config/server_ports.rb の ServerPorts::INTERNAL）。ホストへは公開しない
+    expose:
+      - "3101"
+    environment:
+      RAILS_ENV: development
+      PORT: "3001"
+      HOME: /app/.cache/home
+      BUNDLE_PATH: /app/vendor/bundle
+      BUNDLE_APP_CONFIG: /app/.cache/bundle
+      # 開発 DB。テストは scripts/test_backend.sh が RAILS_ENV=test と bl_test の DATABASE_URL を明示して実行する
+      DATABASE_URL: postgres://${POSTGRES_USER:?scripts/setup_dev_env.sh を実行してください}:${POSTGRES_PASSWORD:?scripts/setup_dev_env.sh を実行してください}@db:5432/bl_development
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      TOKEN_ENCRYPTION_KEY: ${TOKEN_ENCRYPTION_KEY:?scripts/setup_dev_env.sh を実行してください}
+      SESSION_SECRET: ${SESSION_SECRET:?scripts/setup_dev_env.sh を実行してください}
+      RECAPTCHA_SECRET_KEY: ${RECAPTCHA_SECRET_KEY}
+      RELAY_SHARED_SECRET: ${RELAY_SHARED_SECRET:?scripts/setup_dev_env.sh を実行してください}
+      BFF_SHARED_SECRET: ${BFF_SHARED_SECRET:?scripts/setup_dev_env.sh を実行してください}
+      ADMIN_BASIC_USER: ${ADMIN_BASIC_USER:?scripts/setup_dev_env.sh を実行してください}
+      ADMIN_BASIC_PASSWORD: ${ADMIN_BASIC_PASSWORD:?scripts/setup_dev_env.sh を実行してください}
+      RELAY_PUBLIC_URL: ${RELAY_PUBLIC_URL:?scripts/setup_dev_env.sh を実行してください}
+    volumes:
+      - ./src/backend:/app
+      - ./src/contracts:/contracts:ro
+      - ./scripts/container:/scripts:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        mkdir -p "$$HOME" "$$BUNDLE_APP_CONFIG"
+        bundle check || bundle install
+        bin/rails db:prepare
+        exec bundle exec puma -C config/puma.rb
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:3001/up"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 600s
+
+  relay:
+    build:
+      context: ./src/relay
+      target: dev
+    user: *host-user
+    init: true
+    working_dir: /app
+    ports:
+      - "${RELAY_PORT:-3002}:3002"
+    environment:
+      GIN_MODE: debug
+      PORT: "3002"
+      HOME: /app/.cache/home
+      GOPATH: /app/.cache/go
+      GOCACHE: /app/.cache/go-build
+      GOFLAGS: -modcacherw
+      RELAY_SHARED_SECRET: ${RELAY_SHARED_SECRET:?scripts/setup_dev_env.sh を実行してください}
+      BACKEND_INTERNAL_URL: ${BACKEND_INTERNAL_URL:?scripts/setup_dev_env.sh を実行してください}
+    volumes:
+      - ./src/relay:/app
+      - ./src/contracts:/contracts:ro
+      - ./scripts/container:/scripts:ro
+    # 開発用のバイナリを .cache/bin へビルドしてから、それ自身をプロセスとして起動する（停止の信号を直接受けるため）
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        mkdir -p "$$HOME" "$$GOPATH" "$$GOCACHE" /app/.cache/bin
+        go build -o /app/.cache/bin/relay .
+        exec /app/.cache/bin/relay
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:3002/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 300s
+
+  frontend:
+    image: node:22-slim
+    user: *host-user
+    init: true
+    working_dir: /app
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      HOME: /app/.cache/home
+      npm_config_cache: /tmp/npm-cache
+      NEXT_TELEMETRY_DISABLED: "1"
+      RECAPTCHA_SITE_KEY: ${RECAPTCHA_SITE_KEY}
+      BACKEND_ORIGIN: ${BACKEND_ORIGIN:?scripts/setup_dev_env.sh を実行してください}
+      BFF_SHARED_SECRET: ${BFF_SHARED_SECRET:?scripts/setup_dev_env.sh を実行してください}
+    volumes:
+      - ./src/frontend:/app
+      - ./src/contracts:/contracts:ro
+      - ./scripts/container:/scripts:ro
+    command:
+      - sh
+      - -c
+      - |
+        set -eu
+        mkdir -p "$$HOME" "$$npm_config_cache"
+        npm install --no-audit --no-fund
+        exec npm run dev -- --hostname 0.0.0.0 --port 3000
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 600s
+
+volumes:
+  db_data:

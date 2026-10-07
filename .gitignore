@@ -56,6 +56,19 @@ venv/
 /bin/
 /src/relay/bin/
 
+# --- 開発環境（docker compose）が各層のディレクトリ内へ作る依存・キャッシュ ---
+# コンテナはホストの UID・GID で動くため、これらもホストのユーザーの所有になる（root 所有のファイルを作らない）
+# Ruby の gem（BUNDLE_PATH）、bundler の設定、各層のツールの HOME・npm・Go のキャッシュと開発用のビルド結果
+/src/backend/vendor/bundle/
+/src/backend/.bundle/
+/src/backend/.cache/
+/src/frontend/.cache/
+/src/relay/.cache/
+# Next.js が自動生成する型の参照・SWC のプラグインの置き場と、TypeScript の増分ビルドの記録
+/src/frontend/next-env.d.ts
+/src/frontend/.swc/
+*.tsbuildinfo
+
 # --- Rust / Tauri ---
 target/
 src-tauri/target/
