@@ -1,0 +1,27 @@
+/* YouTube の接続のカード。出どころ: app-ui/Account.dc.html の .acts・.fine・チャンネル名の行。 */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-12);
+}
+
+/* 再確認の制限・次に再確認できる時刻（補足の大きさ） */
+.hint {
+  color: var(--silver-70);
+  font-size: var(--fs-12);
+  line-height: var(--lh-ui);
+}
+
+/* チャンネル名を取得できなかったときの、取得できなかった旨と対処。警告の図形を伴う（色だけで示さない） */
+.unavailable {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-4) var(--sp-8);
+  font-weight: var(--fw-regular);
+}
+
+.unavailableIcon {
+  color: var(--warn);
+}

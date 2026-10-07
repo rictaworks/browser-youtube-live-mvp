@@ -1,0 +1,46 @@
+/* 価値の 4 点。出どころ: app-ui/Landing.dc.html の .grid・.vc。
+   見出し 18 px は、トークンに無いため、近い値（--fs-20）へ丸めた。 */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-24);
+  margin-top: var(--sp-60);
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-12);
+  padding: var(--sp-36) var(--sp-28);
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  backdrop-filter: var(--blur-card);
+  transition-property: border-color, transform, box-shadow;
+  transition-duration: var(--dur-card);
+}
+
+.card:hover {
+  border-color: var(--teal);
+  box-shadow: var(--glow-card);
+  transform: translateY(-6px);
+}
+
+.icon {
+  color: var(--teal);
+  font-size: var(--fs-28);
+  text-shadow: var(--text-glow-icon);
+}
+
+.title {
+  color: var(--white);
+  font-size: var(--fs-20);
+  font-weight: var(--fw-semibold);
+}
+
+.body {
+  color: var(--silver);
+  font-size: var(--fs-13);
+  font-weight: var(--fw-light);
+  line-height: var(--lh-body);
+}

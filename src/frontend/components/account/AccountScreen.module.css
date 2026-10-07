@@ -1,0 +1,14 @@
+/* アカウント画面の縦の並び。出どころ: app-ui/Account.dc.html の .page（カード・通知・操作を、縦に並べる）と .acts。
+   PageContainer（共通部品）と同じ並び（縦・間隔 20 px）を、ダイアログを開いている間に操作できなくする（inert）範囲の入れ物で保つ。 */
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-20);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-12);
+}

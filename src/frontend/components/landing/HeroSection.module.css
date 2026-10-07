@@ -1,0 +1,62 @@
+/* ヒーロー。出どころ: app-ui/Landing.dc.html の .hero・.hin・.hh・.hs・.fine。
+   背景の画像は使わない（出どころと利用許諾が未確認）。トークンのグラデーションだけで、見出しの背後に、かすかな光を置く。
+   モックは、固定のヘッダーの下まで広がる全画面だが、共通レイアウトのヘッダーは固定ではないため、高さは画面の 8 割にした。 */
+.hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 80vh;
+  padding: var(--sp-80) var(--section-pad-x) var(--sp-100);
+  background: var(--gradient-roadmap-glow);
+  text-align: center;
+  overflow: hidden;
+}
+
+.inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-28);
+  max-width: var(--container-hero);
+}
+
+.headline {
+  font-family: var(--font-display);
+  font-size: var(--fs-hero);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-hero);
+  text-shadow: var(--text-glow-hero);
+}
+
+.line {
+  display: block;
+}
+
+.accent {
+  color: var(--teal);
+  font-style: italic;
+  text-shadow: var(--text-glow-hero-em);
+}
+
+.summary {
+  max-width: 620px;
+  color: var(--silver);
+  font-size: var(--fs-hero-sub);
+  font-weight: var(--fw-light);
+  line-height: var(--lh-sub);
+}
+
+.fine {
+  max-width: 520px;
+  color: var(--silver-70);
+  font-size: var(--fs-12);
+  line-height: var(--lh-sub);
+}
+
+@media (max-width: 767px) {
+  .hero {
+    padding: var(--sp-80) var(--section-pad-x-mobile);
+  }
+}

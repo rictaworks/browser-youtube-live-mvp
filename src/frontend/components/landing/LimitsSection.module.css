@@ -1,0 +1,58 @@
+/* 制限。出どころ: app-ui/Landing.dc.html の .lead・.stats・.sn・.sk・.box（Other Limits）。
+   数値は、見出しの下に大きく置き、説明は、その下に置く（DOM は、説明（dt）→ 数値（dd）の順。見た目だけを、column-reverse で入れ替える）。 */
+.lead {
+  max-width: 620px;
+  margin: var(--sp-28) auto 0;
+  color: var(--silver);
+  font-weight: var(--fw-light);
+  line-height: var(--lh-body);
+  text-align: center;
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--sp-40);
+  margin-top: var(--sp-60);
+  text-align: center;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column-reverse;
+  justify-content: flex-end;
+}
+
+.figure {
+  color: var(--teal);
+  font-family: var(--font-display);
+  font-size: var(--fs-stat-big);
+  font-weight: var(--fw-bold);
+  line-height: var(--lh-flush);
+  text-shadow: var(--text-glow-stat);
+}
+
+.unit {
+  margin-left: var(--sp-8);
+  color: var(--silver);
+  font-family: var(--font-sans);
+  font-size: var(--fs-14);
+  font-weight: var(--fw-regular);
+  text-shadow: none;
+}
+
+.caption {
+  margin-top: var(--sp-12);
+  color: var(--silver);
+  font-size: var(--fs-12);
+  letter-spacing: var(--ls-01);
+  line-height: var(--lh-sub);
+}
+
+.captionNote {
+  display: block;
+}
+
+.other {
+  margin-top: var(--sp-60);
+}
