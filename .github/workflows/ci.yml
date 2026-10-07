@@ -1,0 +1,520 @@
+# CI（GitHub Actions）。issue #2。
+#
+# プルリクエストと main への push のたびに、3 層（backend・frontend・relay）のテスト・lint・依存の脆弱性監査と、
+# 機密・削除系コマンド・絵文字の混入検査（hygiene）を実行する。
+#
+# 含めないもの: デプロイ・リリース・公開（CD は作らない。CLAUDE.md 未決事項 U2）。secrets は参照しない。
+#   backend のテスト用 DB のパスワードは、使い捨てのサービスコンテナ専用の、明らかなダミー値（資格情報ではない）。
+# 実行環境: ホストへ直接ツールチェーンを入れる（Ruby 3.4・Node 22・Go 1.27）。docker compose は使わない。
+#   手元の scripts/test_backend.sh・test_frontend.sh・test_relay.sh（コンテナの中は scripts/container/test_*.sh）と、
+#   同じ内容のコマンドを実行する（結果が食い違わないようにするため）。
+# 3 層のテストが src/contracts/ を必要とするときのため、チェックアウトはリポジトリ全体（sparse-checkout を使わない）。
+#   手元は /contracts へマウントするが、CI にマウントは無い。テストが相対パスで見つける（探索は issue #3）。
+# 各 job は、前の step が失敗しても、できる検査を続ける（1 回の実行で、すべての失敗が分かるように。手元のスクリプトと同じ）。
+#   後続の step の if は、準備の step（id）の成否だけを見る。失敗した job は、最後に赤になる。
+#
+# TH5（テストハーネス安全性の「CI 側の二重化」）: すべての job に timeout-minutes を付け、実行コマンド自体にも timeout を付けて、
+#   暴走したときに、job が早く落ちるようにする。timeout は --kill-after 付き（TERM に応じない暴走も、KILL で止める）。
+#   上限は、下の env の TIMEOUT_SHORT・TIMEOUT_LONG。
+#
+# hygiene の検査と、除外の根拠
+#   secrets    git ls-files に、.env・.env.*・master.key（config/master.key を含む）・*.pem・*.key が無いこと。
+#              除外は .env.example だけ（変数名だけを書いた見本。requirements.md 29.4）。
+#   deletion   削除系コマンドが無いこと（CLAUDE.md「削除系コマンドの禁止」）。
+#              対象: .github/・scripts/・Dockerfile・compose のファイル・*.sh・実行権限つきのファイル。
+#              検査しない（理由つき。ほかは除外しない。除外した行数は、実行のたびにログへ出す）:
+#                1. コメントの行（行頭の空白のあとが #）: 実行されない。禁止を説明する文章は、コメントに書く。
+#                2. scripts/dc.sh の、拒否する語の一覧（readonly DENIED_* の配列と、case の見出し行）: dc.sh は削除系の操作を
+#                   拒否する側で、拒否の対象の語をデータとして書く。実行されない。ほかのファイル・ほかの行には適用しない。
+#                3. test/ 全体: テストは、拒否・走査の動作を確かめるため、削除系の語を入力のデータとして扱う。
+#                   scripts/tests/ は test/ の外にあり、語を分割して書く規約（例: d${E}own）に沿っているため、検査の対象。
+#              このワークフロー自身も対象。検査の語は、各語の 1 文字を [] で囲んで書く（r[m] は rm に一致する）ため、
+#              自分自身を除外せずに済む。
+#   emoji      src/ の追跡されたテキストファイルに、絵文字が無いこと（アイコンは FontAwesome。CLAUDE.md）。
+#              除外: node_modules・vendor・.cache・.next（依存・生成物）、バイナリ（NUL を含む）。
+#              UTF-8 として読めないテキストは、判定できないため失敗にする（requirements.md 9.3 と同じ、拒否側へ倒す）。
+#              絵文字の範囲: U+1F000-1FAFF（麻雀牌・トランプ・国旗・絵文字・記号と絵）、Unicode の Emoji_Presentation=Yes の文字、
+#              記号の区画（U+2300-23FF・2600-27BF・2900-297F・2B00-2BFF）にある Emoji=Yes の文字、異体字選択子（U+FE0F）・
+#              囲みキーキャップ（U+20E3）・タグ文字。Emoji=Yes でも、通常の文章に使う記号（著作権・登録商標・商標の記号、感嘆符の組、
+#              矢印、三角、囲み漢字など。U+00A9・00AE・2122・203C・2049・2139・2194-2199・25B6・25C0・3297・3299 ほか）は、
+#              異体字選択子が付いたときだけ絵文字として扱う。※ 〜 → ★ ☆ ♪ などは、絵文字ではない。
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+# 同じ PR の古い実行を取り消す（取り消しは削除ではない）。main への push は、コミットごとに別の group にして、
+# 取り消しも待ち行列での置き換えも起こさず、1 件ずつ記録を残す
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# run の step は、bash（-eo pipefail）で実行する
+defaults:
+  run:
+    shell: bash
+
+env:
+  # 実行コマンド自体の時間制限（TH5）。短いもの（lint・静的解析・監査・型検査）と、長いもの（依存の取得・DB・テスト・ビルド）
+  TIMEOUT_SHORT: 5m
+  TIMEOUT_LONG: 10m
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # アプリケーション層（Rails）。手元: scripts/test_backend.sh（RSpec・RuboCop・Brakeman・bundler-audit）
+  # ---------------------------------------------------------------------------
+  backend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/backend
+    services:
+      # テスト用の PostgreSQL。使い捨てのコンテナで、この job の中だけから届く。値は明らかなダミー（開発・本番の値とは無関係）
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: bl_ci
+          POSTGRES_PASSWORD: dummy-ci-only-password
+          POSTGRES_DB: bl_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      # テストは RAILS_ENV=test と、テスト用 DB の DATABASE_URL を明示して実行する。DB 名は、手元のスクリプトの既定と同じ bl_test
+      # （開発 DB の名前は使わない。spec/support/test_environment_guard.rb が、テスト用ではない名前を拒否する）
+      RAILS_ENV: test
+      DATABASE_URL: postgres://bl_ci:dummy-ci-only-password@localhost:5432/bl_test
+    steps:
+      - name: リポジトリ全体のチェックアウト
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Ruby 3.4 の準備と bundle install（gem のキャッシュ付き）
+        id: ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+          bundler-cache: true
+          working-directory: src/backend
+        timeout-minutes: 10
+
+      - name: 使用する版の表示
+        run: ruby -v && bundle -v && psql --version
+
+      - name: RuboCop（omakase）
+        if: ${{ !cancelled() && steps.ruby.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_SHORT" bin/rubocop
+
+      - name: Brakeman（静的解析）
+        if: ${{ !cancelled() && steps.ruby.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_SHORT" bin/brakeman --quiet --no-pager --exit-on-warn --exit-on-error
+
+      - name: bundler-audit（gem の脆弱性監査）
+        if: ${{ !cancelled() && steps.ruby.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_SHORT" bin/bundler-audit check --update
+
+      - name: DB の準備（db:prepare でテスト用 DB へ db/structure.sql を読み込む）
+        id: db
+        if: ${{ !cancelled() && steps.ruby.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_LONG" bin/rails db:prepare
+
+      - name: RSpec
+        if: ${{ !cancelled() && steps.db.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_LONG" bundle exec rspec
+
+  # ---------------------------------------------------------------------------
+  # フロントエンド層（Next.js）。手元: scripts/test_frontend.sh（ESLint・tsc --noEmit・Jest）と、本番ビルド
+  # ---------------------------------------------------------------------------
+  frontend:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/frontend
+    env:
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - name: リポジトリ全体のチェックアウト
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Node 22 の準備（npm のキャッシュ付き）
+        uses: actions/setup-node@v7
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: 使用する版の表示
+        run: node -v && npm -v
+
+      - name: 依存の取得（npm ci）
+        id: install
+        run: timeout --kill-after=30s "$TIMEOUT_LONG" npm ci --no-audit --no-fund
+
+      - name: ESLint
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_SHORT" npm run lint
+
+      - name: 型検査（next typegen と tsc --noEmit）
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_SHORT" npm run typecheck
+
+      - name: Jest
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_LONG" npm test -- --ci
+
+      - name: 本番ビルド（next build）
+        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_LONG" npm run build
+
+      # 本番の依存だけ。開発の依存には、修正版の無い指摘がある（issue #1 の報告）ため、対象にしない
+      - name: 依存の脆弱性監査（npm audit --omit=dev）
+        if: ${{ !cancelled() }}
+        run: timeout --kill-after=30s "$TIMEOUT_SHORT" npm audit --omit=dev
+
+  # ---------------------------------------------------------------------------
+  # 中継層（Gin）。手元: scripts/test_relay.sh（gofmt・go vet・go test）。CI は競合検出（-race）つき
+  # ---------------------------------------------------------------------------
+  relay:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: src/relay
+    env:
+      # テストは test モードで実行する（環境の判定は GIN_MODE）。手元のスクリプトと同じ
+      GIN_MODE: test
+    steps:
+      - name: リポジトリ全体のチェックアウト
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Go の準備（go.mod の版・モジュールのキャッシュ付き）
+        id: go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: src/relay/go.mod
+          cache-dependency-path: src/relay/go.sum
+
+      - name: 使用する版の表示
+        run: go version
+
+      - name: gofmt の差分なし
+        if: ${{ !cancelled() && steps.go.outcome == 'success' }}
+        run: |
+          unformatted="$(timeout --kill-after=30s "$TIMEOUT_SHORT" gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "gofmt の差分があります（gofmt -w で整えてください）:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go vet
+        if: ${{ !cancelled() && steps.go.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_SHORT" go vet ./...
+
+      # -count=1: 復元したキャッシュの「成功」を使わず、毎回テストを実行する
+      - name: go test（競合検出つき）
+        if: ${{ !cancelled() && steps.go.outcome == 'success' }}
+        run: timeout --kill-after=30s "$TIMEOUT_LONG" go test -race -count=1 ./...
+
+  # ---------------------------------------------------------------------------
+  # 混入検査。機密のファイル・削除系コマンド・絵文字。検査の内容と除外の根拠は、このファイルの冒頭を参照
+  # 3 つの検査は、どれかが失敗しても、残りを実行する
+  # ---------------------------------------------------------------------------
+  hygiene:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: リポジトリ全体のチェックアウト
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: 機密ファイルが追跡されていないこと
+        id: secrets
+        if: ${{ !cancelled() }}
+        run: |
+          timeout --kill-after=30s "$TIMEOUT_SHORT" python3 - <<'PY'
+          import os
+          import subprocess
+          import sys
+
+
+          def tracked_files():
+              output = subprocess.run(["git", "ls-files", "-z"], check=True, capture_output=True).stdout
+              return [os.fsdecode(path) for path in output.split(b"\0") if path]
+
+
+          def is_secret_like(path):
+              # ファイル名（パスの最後の要素）で判定する。大文字・小文字は区別しない
+              name = path.rsplit("/", 1)[-1].lower()
+              if name == ".env.example":
+                  return False  # 変数名だけを書いた見本は、追跡してよい
+              return name == ".env" or name.startswith(".env.") or name == "master.key" or name.endswith((".pem", ".key"))
+
+
+          def escape_data(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+          def main():
+              files = tracked_files()
+              found = [path for path in files if is_secret_like(path)]
+              for path in found:
+                  print(f"::error::機密の疑いのあるファイルが git で追跡されています: {escape_data(path)}")
+              if found:
+                  print(f"違反 {len(found)} 件。追跡から外し、.gitignore へ追加してください。値が公開されていた場合は、再発行してください。")
+                  return 1
+              print(f"問題ありません（追跡しているファイル {len(files)} 件を検査しました）。")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY
+
+      - name: 削除系コマンドが、ワークフロー・スクリプト・Dockerfile に無いこと
+        id: deletion
+        if: ${{ !cancelled() }}
+        run: |
+          timeout --kill-after=30s "$TIMEOUT_SHORT" python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+
+
+          def tracked_entries():
+              """追跡しているファイルの (モード, パス) のリスト"""
+              output = subprocess.run(["git", "ls-files", "-s", "-z"], check=True, capture_output=True).stdout
+              entries = []
+              for record in output.split(b"\0"):
+                  if record:
+                      meta, path = record.split(b"\t", 1)
+                      entries.append((meta.split()[0].decode("ascii"), os.fsdecode(path)))
+              return entries
+
+
+          def is_target(mode, path):
+              # test/ は対象外（冒頭の「除外の根拠」の 3）
+              if path.startswith("test/"):
+                  return False
+              name = path.rsplit("/", 1)[-1]
+              return (
+                  path.startswith(".github/")
+                  or path.startswith("scripts/")
+                  or name.startswith("Dockerfile")
+                  or name.endswith((".Dockerfile", ".dockerfile", ".sh", ".bash"))
+                  or re.fullmatch(r"(docker-)?compose(\..+)?\.ya?ml", name) is not None
+                  or mode == "100755"
+              )
+
+
+          def rules():
+              # このワークフロー自身も検査の対象。定義の中の語が検査に掛からないよう、各語の 1 文字を [] で囲む（r[m] は rm に一致する）。
+              before = r"(?<![A-Za-z0-9_.-])"  # 語の前に、英数字・_・.・- が無い（別の語・ファイル名の一部を除く）
+              after = r"(?![A-Za-z0-9_./-])"
+              option_before = r"(?<![A-Za-z0-9_-])"
+              option_after = r"(?![A-Za-z0-9_-])"
+              return [
+                  ("ファイル・ディレクトリを消すコマンド", [before + r"(?:r[m](?:dir|i)?|un[l]ink|sh[r]ed)" + after]),
+                  ("削除のオプション", [option_before + r"--?d[e]lete(?:-[a-z]+)?" + option_after]),
+                  ("git の削除系", [option_before + r"git\s+(?:cl[e]an|worktree\s+r[e]move|branch\s+-[A-Za-z]*[dD][A-Za-z]*)" + option_after]),
+                  (
+                      "docker の削除系",
+                      [option_before + r"docker[^#\n]*\sd[o]wn" + option_after, option_before + r"--r[m]" + option_after],
+                  ),
+                  ("不要な資源の一括削除", [option_before + r"pr[u]ne" + option_after]),
+                  (
+                      "言語・道具のファイル削除の呼び出し",
+                      [
+                          r"(?<![A-Za-z0-9_])(?:FileUtils|File|Dir|Pathname|fs|os|shutil)\.(?:r[m]\w*|[Rr]emove\w*|d[e]lete\w*|un[l]ink\w*)",
+                          option_before + r"rim[r]af" + option_after,
+                      ],
+                  ),
+                  (
+                      "Rails のファイル削除タスク",
+                      [option_before + r"(?:log|tmp):cl[e]ar" + option_after, option_before + r"assets:cl[o]bber" + option_after],
+                  ),
+              ]
+
+
+          def excluded_lines(path, lines):
+              """検査しない行の {行の位置（0 始まり）: 除外の理由}。冒頭の「除外の根拠」の 1 と 2"""
+              excluded = {}
+              for index, line in enumerate(lines):
+                  if re.match(r"\s*#", line):
+                      excluded[index] = "コメントの行"
+              if path == "scripts/dc.sh":
+                  inside = False
+                  for index, line in enumerate(lines):
+                      text = line.rstrip()
+                      if re.fullmatch(r"readonly DENIED_[A-Z_]+=\(", text):
+                          inside = True
+                      if inside:
+                          excluded[index] = "scripts/dc.sh の拒否の一覧"
+                          inside = text != ")"
+                      elif re.fullmatch(r"\s*[^\s|()]+(?:\s*\|\s*[^\s|()]+)*\)", text):
+                          excluded[index] = "scripts/dc.sh の拒否の一覧"
+              return excluded
+
+
+          def scan(path, compiled):
+              """(違反の一覧, 除外した行の理由ごとの件数) を返す。違反は (行番号, 分類, 行の内容)"""
+              with open(path, "rb") as handle:
+                  data = handle.read()
+              if b"\0" in data[:8000]:
+                  return [], {}  # バイナリ
+              try:
+                  lines = data.decode("utf-8").split("\n")
+              except UnicodeDecodeError as error:
+                  return [(0, "UTF-8 として読めない（判定できないため、失敗にする）", str(error))], {}
+              excluded = excluded_lines(path, lines)
+              counts = {}
+              for reason in excluded.values():
+                  counts[reason] = counts.get(reason, 0) + 1
+              hits = []
+              for index, line in enumerate(lines):
+                  if index in excluded:
+                      continue
+                  for label, patterns in compiled:
+                      if any(pattern.search(line) for pattern in patterns):
+                          hits.append((index + 1, label, line.strip()[:200]))
+              return hits, counts
+
+
+          def main():
+              compiled = [(label, [re.compile(pattern) for pattern in patterns]) for label, patterns in rules()]
+              targets = [path for mode, path in tracked_entries() if is_target(mode, path)]
+              violations = 0
+              excluded_total = {}
+              checked = 0
+              for path in targets:
+                  if os.path.islink(path) or not os.path.isfile(path):
+                      continue
+                  checked += 1
+                  hits, counts = scan(path, compiled)
+                  for reason, count in counts.items():
+                      excluded_total[reason] = excluded_total.get(reason, 0) + count
+                  for number, label, text in hits:
+                      violations += 1
+                      print(f"::error::削除系のコマンドです（{label}）: {path}:{number}")
+                      print(f"  {path}:{number}: {text}")
+              summary = "、".join(f"{reason} {count} 行" for reason, count in sorted(excluded_total.items())) or "なし"
+              print(f"検査したファイル {checked} 件。検査しなかった行: {summary}。")
+              if violations:
+                  print(f"違反 {violations} 件。削除系のコマンドは書きません（CLAUDE.md）。削除が必要な場合は、手動で行ってください。")
+                  return 1
+              print("問題ありません。")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY
+
+      - name: src/ に絵文字が無いこと
+        id: emoji
+        if: ${{ !cancelled() }}
+        run: |
+          timeout --kill-after=30s "$TIMEOUT_SHORT" python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+          import sys
+          import unicodedata
+
+
+          def excluded_directories():
+              return {"node_modules", "vendor", ".cache", ".next"}
+
+
+          def emoji_pattern():
+              # 絵文字の範囲（コードポイントの 16 進数。A-B は範囲）。冒頭の「絵文字の範囲」を参照
+              table = """
+                  231A-231B 2328 23CF 23E9-23F3 23F8-23FA 25FD-25FE
+                  2600-2604 260E 2611 2614-2615 2618 261D 2620 2622-2623 2626 262A 262E-262F 2638-263A 2640 2642
+                  2648-2653 265F-2660 2663 2665-2666 2668 267B 267E-267F 2692-2697 2699 269B-269C 26A0-26A1 26A7
+                  26AA-26AB 26B0-26B1 26BD-26BE 26C4-26C5 26C8 26CE-26CF 26D1 26D3-26D4 26E9-26EA 26F0-26F5 26F7-26FA 26FD
+                  2702 2705 2708-270D 270F 2712 2714 2716 271D 2721 2728 2733-2734 2744 2747 274C 274E 2753-2755 2757
+                  2763-2764 2795-2797 27A1 27B0 27BF 2934-2935 2B05-2B07 2B1B-2B1C 2B50 2B55
+                  1F000-1FAFF
+                  FE0F 20E3 E0020-E007F
+              """
+              ranges = []
+              for token in table.split():
+                  low, _, high = token.partition("-")
+                  ranges.append(f"\\U{int(low, 16):08X}-\\U{int(high or low, 16):08X}")
+              return re.compile("[" + "".join(ranges) + "]")
+
+
+          def source_files():
+              output = subprocess.run(["git", "ls-files", "-z", "--", "src"], check=True, capture_output=True).stdout
+              paths = [os.fsdecode(path) for path in output.split(b"\0") if path]
+              skipped = excluded_directories()
+              return [
+                  path
+                  for path in paths
+                  if not (set(path.split("/")) & skipped) and os.path.isfile(path) and not os.path.islink(path)
+              ]
+
+
+          def find_emoji(text, pattern):
+              """絵文字の (行番号, 桁, 文字) のリスト"""
+              found = []
+              for number, line in enumerate(text.split("\n"), 1):
+                  for match in pattern.finditer(line):
+                      found.append((number, match.start() + 1, match.group()))
+              return found
+
+
+          def main():
+              pattern = emoji_pattern()
+              files = source_files()
+              violations = 0
+              printed = 0
+              for path in files:
+                  with open(path, "rb") as handle:
+                      data = handle.read()
+                  if b"\0" in data[:8000]:
+                      continue  # バイナリ
+                  try:
+                      text = data.decode("utf-8")
+                  except UnicodeDecodeError as error:
+                      violations += 1
+                      print(f"::error::UTF-8 として読めないため、絵文字の有無を判定できません: {path}（{error}）")
+                      continue
+                  for number, column, char in find_emoji(text, pattern):
+                      violations += 1
+                      if printed < 100:
+                          printed += 1
+                          name = unicodedata.name(char, "名前なし")
+                          print(f"::error::絵文字があります: {path}:{number}:{column} U+{ord(char):04X} {name}")
+              print(f"検査したファイル {len(files)} 件（node_modules・vendor・.cache・.next とバイナリを除く）。")
+              if violations:
+                  print(f"違反 {violations} 件。絵文字は使いません。アイコンは FontAwesome を使ってください（CLAUDE.md）。")
+                  return 1
+              print("問題ありません。")
+              return 0
+
+
+          if __name__ == "__main__":
+              sys.exit(main())
+          PY
