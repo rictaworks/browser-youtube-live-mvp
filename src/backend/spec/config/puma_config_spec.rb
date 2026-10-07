@@ -26,19 +26,45 @@ RSpec.describe "config/puma.rb" do
     end
   end
 
+  # ホストを指定しない `port` を、Puma は、IPv6 のインターフェイスがある環境（GitHub Actions の実行環境など）では [::]、
+  # 無い環境（手元の docker compose など）では 0.0.0.0 にする。どちらも「すべてのインターフェイス」なので、
+  # 待ち受けが「すべてのインターフェイス」であることと、口の番号を確かめる（環境に依存しない）。
+  # 本番（Railway）の内部ネットワークは IPv6 で到達するため、ホストを 0.0.0.0 に固定しない。
+  WILDCARD_BIND = %r{\Atcp://(?:0\.0\.0\.0|\[::\]):(\d+)\z}
+
+  def bound_ports(options)
+    options[:binds].map do |bind|
+      match = WILDCARD_BIND.match(bind)
+      raise "すべてのインターフェイスでの待ち受けではありません: #{bind}" unless match
+
+      match[1].to_i
+    end
+  end
+
   describe "待ち受ける口" do
     it "PORT が未設定なら、公開側は 3001、内部側は 3101 の 2 つで待ち受ける" do
-      expect(puma_options[:binds]).to eq([ "tcp://0.0.0.0:3001", "tcp://0.0.0.0:3101" ])
+      expect(bound_ports(puma_options)).to eq([ 3001, 3101 ])
     end
 
     it "PORT があれば、公開側はその口にする（内部側は変わらない）" do
-      expect(puma_options("PORT" => "8080")[:binds]).to eq([ "tcp://0.0.0.0:8080", "tcp://0.0.0.0:3101" ])
+      expect(bound_ports(puma_options("PORT" => "8080"))).to eq([ 8080, 3101 ])
     end
 
     it "内部側の口の番号は、環境変数ではなく、設定の定数（ServerPorts::INTERNAL）である" do
       expect(ServerPorts::INTERNAL).to eq(3101)
       expect(ServerPorts::PUBLIC_DEFAULT).to eq(3001)
-      expect(puma_options("PORT" => "8080", "INTERNAL_PORT" => "9999")[:binds].last).to eq("tcp://0.0.0.0:3101")
+      expect(bound_ports(puma_options("PORT" => "8080", "INTERNAL_PORT" => "9999")).last).to eq(3101)
+    end
+  end
+
+  describe "待ち受けの形の判定（環境に依存しない）" do
+    it "0.0.0.0 と [::] を、どちらも「すべてのインターフェイス」として受け付ける" do
+      expect(bound_ports({ binds: [ "tcp://0.0.0.0:3001", "tcp://[::]:3101" ] })).to eq([ 3001, 3101 ])
+    end
+
+    it "ループバックや特定のアドレスでの待ち受けは、受け付けない（公開側・内部側の設定の誤りを見逃さない）" do
+      expect { bound_ports({ binds: [ "tcp://127.0.0.1:3001" ] }) }.to raise_error(RuntimeError, /すべてのインターフェイス/)
+      expect { bound_ports({ binds: [ "tcp://[::1]:3001" ] }) }.to raise_error(RuntimeError, /すべてのインターフェイス/)
     end
   end
 
