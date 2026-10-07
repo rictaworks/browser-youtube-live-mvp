@@ -129,7 +129,31 @@ issue > setting & coding > security review > add, commit, push > reviewer & pr-c
 
 ## 環境・コマンド
 
-開発環境は WSL2 上の docker compose（`browser-live-bridge-demo` と同方式）とする。`src/`・`docker-compose.yml`・CI は**まだ存在しない**。足場づくりの Issue で作成し、コマンド（起動・lint・テスト・ビルド）はそのとき確定したものをここへ追記する。**未実装のコマンドを推測で書かない。**
+開発環境は WSL2 上の docker compose。ホストに必要なのは Docker だけで、Ruby・Node・Go・PostgreSQL はコンテナの中で動く（Issue #1・PR #33 で整備済み。確定したコマンドを次に示す）。CI は #2 で整備する。**未実装のコマンドを推測で書かない。**
+
+**docker compose は必ず `scripts/dc.sh` 経由で呼ぶ。** ホストの UID・GID を渡し（コンテナが root 所有のファイルを作らない）、削除につながる操作（`down`・`rm`・`run --rm`・`prune`・`exec` に渡した削除コマンドなど）を拒否する。コンテナは `stop` で止める。起動中のコンテナでの実行は `exec`（`run` は使わない）。
+
+| 用途 | コマンド |
+|---|---|
+| 初期設定（`.env` の生成。冪等・既存の値を上書きしない） | `scripts/setup_dev_env.sh` |
+| 起動（db・backend・relay・frontend が healthy になるまで待つ） | `scripts/dc.sh up -d --wait` |
+| 停止 | `scripts/dc.sh stop` |
+| ログ | `scripts/dc.sh logs --tail 100 backend` |
+| コンテナ内で実行 | `scripts/dc.sh exec -T backend bin/rails about` |
+| 全テストと lint | `scripts/test_all.sh` |
+| backend（RSpec・RuboCop・Brakeman・bundler-audit） | `scripts/test_backend.sh [--no-db｜--db] [RSpec のパス]`。`TEST_DB_NAME=bl_test_<名前>` でテスト用 DB を分けられる。`spec_helper` だけのスペックは Rails を起動しない（`--no-db`） |
+| frontend（ESLint・`tsc --noEmit`・Jest） | `scripts/test_frontend.sh [Jest の引数]` |
+| relay（gofmt・`go vet`・`go test`） | `scripts/test_relay.sh [go test の引数]` |
+| frontend の本番ビルド | `scripts/dc.sh exec -T frontend npm run build` |
+| relay の本番イメージ | `docker build --target production src/relay` |
+| マイグレーション | `scripts/dc.sh exec -T backend bin/rails db:migrate`（`db/structure.sql` が更新されるのでコミットする） |
+| 依存を足した後 | `scripts/dc.sh restart backend`（または `frontend`）／Dockerfile を変えた後は `scripts/dc.sh up -d --wait --build` |
+
+- ポート：frontend 3000・backend 3001（公開側）・relay 3002。backend の内部通信の口 3101 と db は、ホストへ公開しない。並行して複数の環境を起動するときは `COMPOSE_PROJECT_NAME`・`FRONTEND_PORT`・`BACKEND_PORT`・`RELAY_PORT` で変える
+- テスト用 DB 以外では backend のスペックを実行しない。`.env` に `RAILS_ENV` を書かない（`scripts/setup_dev_env.sh` が止める。テストが開発 DB を壊す事故の予防）
+- 依存パッケージの置き場は、各層のディレクトリ内の gitignore 済みの場所（`src/backend/vendor/bundle`・`src/frontend/node_modules`・`src/relay/.cache`）。Domain Core は `src/backend/app/domain/`・`src/frontend/core/`・`src/relay/core/`
+- `test/pr<PR 番号>/` に、その PR のシステム・受け入れ・結合のテスト（開発サーバー対象）と `run_all.sh`・`README.md` を置く（例：`test/pr33/run_all.sh`）
+- コミットの前に、Bash の呼び出しを分ける：`bash .claude/hooks/run_security_review.sh` → 報告を読む → `python3 .claude/hooks/record_pass.py security`（ここまでで 1 回の呼び出しにまとめない。フックは呼び出しの実行前に記録の有無を判定する）→ 別の呼び出しで `git commit`
 
 必要な環境変数の名前は requirements.md 29.4 の表が正。値はコミットしない（`.env`・`.env.example`、Railway Variables、Vercel Environment Variables）。
 
