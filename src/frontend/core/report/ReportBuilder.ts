@@ -11,11 +11,26 @@
 //
 // 時刻・乱数・タイマを使わない。本文は、ワイヤの検証（parseReportBody）を通した、変更できない（凍結した）値。
 
-import { deepFreeze } from "../contract/deep-freeze";
 import { isLayout, isSourceKind } from "../contract";
 import { REPORT_STATE_VALUES, parseReportBody } from "../transport";
 import type { ReportBody, ReportEvent, ReportState } from "../transport";
 import type { BrowserEvent } from "./types";
+
+/**
+ * 報告の本文を、その場で凍結する（本文・出来事の配列・各出来事・各出来事の detail）。
+ * parseReportBody が返すのは、入力と共有しない新しい値なので、凍結しても、ビルダーの待ちや呼び出し側の値は変わらない。
+ * 契約の内部の道具（contract/deep-freeze。contract の入口は公開していない）には依存しない。
+ */
+function freezeReportBody(body: ReportBody): ReportBody {
+  for (const event of body.events) {
+    if (event.detail !== undefined) {
+      Object.freeze(event.detail);
+    }
+    Object.freeze(event);
+  }
+  Object.freeze(body.events);
+  return Object.freeze(body);
+}
 
 /** 1 つの報告に載せる出来事の数の、既定の上限。契約に定めは無い（仮置き）。大量の出来事で、報告が 2 MB を超えないための上限。 */
 export const DEFAULT_MAX_EVENTS_PER_REPORT = 50;
@@ -143,7 +158,7 @@ export class ReportBuilder {
   prepare(snapshot: ReportSnapshot): PreparedReport {
     const checked = checkSnapshot(snapshot);
     const events = this.pending.slice(0, this.maxEventsPerReport);
-    const body = deepFreeze(
+    const body = freezeReportBody(
       parseReportBody({
         backlog_ms: Math.round(checked.backlogMs ?? 0),
         dropped_video_frames: checked.droppedVideoFrames,

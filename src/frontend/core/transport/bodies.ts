@@ -14,6 +14,7 @@ import {
   BROWSER_END_REASON_VALUES,
   REPORT_STATE_VALUES,
   STATUS_WARNING_VALUES,
+  WATCH_URL_HOSTS,
 } from "./messages";
 import type {
   AcceptedBody,
@@ -40,6 +41,13 @@ const DETAIL_MAX_ENTRIES = 4;
 
 /** 接続チケット：URL 安全な文字列（印字できる ASCII。空白・制御文字を含まない）。 */
 const TICKET_PATTERN = /^[\x21-\x7e]+$/;
+
+/**
+ * 視聴 URL の形：https:// + ホスト（半角の英数字・ドット・ハイフンだけ。ユーザー情報（@）・ポート（:）を持たない）+ 省略できる残り（/ ? # から始まる）。
+ * 残りは、印字できる ASCII（空白・制御文字・DEL・ASCII 以外を含まない）で、バックスラッシュを含まない（ブラウザが / として扱い、ホストの読みが分かれるため）。
+ * ホストは、WATCH_URL_HOSTS のどれかと完全に一致すること（大文字・末尾のドット・サブドメインは拒否する）。
+ */
+const WATCH_URL_PATTERN = /^https:\/\/([a-z0-9.-]+)(?:[/?#][\x21-\x5b\x5d-\x7e]*)?$/;
 
 function fail(path: string, expectation: string): never {
   throw new FrameError("invalid_body", `${path}: ${expectation}`);
@@ -86,6 +94,16 @@ const stringValue: Validator<string> = (value, path) => {
     return fail(path, "must be a string");
   }
   return value;
+};
+
+/** 視聴 URL：https の YouTube のホスト（WATCH_URL_HOSTS）だけ。検査した文字列を、そのまま返す。詳細に値（ホスト・パス・資格情報）を含めない。 */
+const watchUrlValue: Validator<string> = (value, path) => {
+  const text = stringValue(value, path);
+  const match = WATCH_URL_PATTERN.exec(text);
+  if (match === null || !(WATCH_URL_HOSTS as readonly string[]).includes(match[1])) {
+    return fail(path, `must be an https URL on one of these hosts: ${WATCH_URL_HOSTS.join(", ")}`);
+  }
+  return text;
 };
 
 /** minimum 以上の安全整数（小数・NaN・無限大・安全整数を超える値は拒否する）。 */
@@ -275,7 +293,7 @@ export function parseStatusBody(value: unknown): StatusBody {
   const root = asObject(value, "status");
   return {
     state: required(root, "state", "status", oneOf(BROADCAST_STATE_VALUES)),
-    watch_url: requiredOrNull(root, "watch_url", "status", stringValue),
+    watch_url: requiredOrNull(root, "watch_url", "status", watchUrlValue),
     warning: requiredOrNull(root, "warning", "status", oneOf(STATUS_WARNING_VALUES)),
     time_limit_notice_seconds: requiredOrNull(root, "time_limit_notice_seconds", "status", integerAtLeast(0)),
     end_reason: requiredOrNull(root, "end_reason", "status", oneOf(END_REASON_VALUES)),

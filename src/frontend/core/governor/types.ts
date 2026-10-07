@@ -1,7 +1,7 @@
 // 適応制御（requirements.md 12 章）の、入力と出力の型。
 
 import type { AdaptiveCondition } from "../contract";
-import type { BrowserEvent } from "../report/types";
+import type { BrowserEvent } from "../report";
 
 /** 評価（毎秒）の入力。時刻・設定値・現況は、すべて、引数で受け取る（Domain Core）。 */
 export interface GovernorInput {

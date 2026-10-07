@@ -449,6 +449,127 @@ describe("parseStatusBody（5.13。毎回、状態の全体）", () => {
   });
 });
 
+// 視聴 URL は、画面のリンクとして使われ得る。中継が（誤りまたは乗っ取りで）送る値を、そのまま href へ入れさせないため、
+// https の、YouTube のホスト（www.youtube.com・youtube.com・youtu.be）だけを受ける（フォールバックで通さない）。
+describe("parseStatusBody: 視聴 URL（watch_url）は、https の YouTube のホストだけ", () => {
+  const live = { state: "live", watch_url: "https://www.youtube.com/watch?v=dummyVideoId", warning: null, time_limit_notice_seconds: null, end_reason: null };
+  const withUrl = (watch_url: unknown): Record<string, unknown> => ({ ...live, watch_url });
+
+  test.each([
+    ["契約の例（www.youtube.com）", "https://www.youtube.com/watch?v=dummyVideoId"],
+    ["youtube.com", "https://youtube.com/watch?v=dummyVideoId"],
+    ["youtu.be（短縮）", "https://youtu.be/dummyVideoId"],
+    ["パス・クエリ・フラグメント", "https://www.youtube.com/live/dummyVideoId?feature=share&t=10#comments"],
+    ["パスに @ を含む（チャンネルの表記）", "https://www.youtube.com/@channel/live"],
+    ["パスなし", "https://www.youtube.com"],
+    ["クエリだけ", "https://youtu.be?x=1"],
+  ])("受け取る：%s", (_label, url) => {
+    expect(parseStatusBody(withUrl(url)).watch_url).toBe(url);
+  });
+
+  test("null は受け取る（準備の完了前）。検査しない", () => {
+    expect(parseStatusBody(withUrl(null)).watch_url).toBeNull();
+  });
+
+  test.each([
+    ["http（暗号化なし）", "http://www.youtube.com/watch?v=x"],
+    ["javascript:", "javascript:alert(1)"],
+    ["javascript: にホストの形を足す", "javascript://www.youtube.com/%0aalert(1)"],
+    ["data:", "data:text/html,<script>alert(1)</script>"],
+    ["vbscript:", "vbscript:msgbox(1)"],
+    ["blob:", "blob:https://www.youtube.com/0b0b0b0b"],
+    ["file:", "file:///etc/passwd"],
+    ["ftp:", "ftp://www.youtube.com/"],
+    ["スキームなし", "www.youtube.com/watch?v=x"],
+    ["スキーム相対", "//www.youtube.com/watch?v=x"],
+    ["スラッシュ 1 本", "https:/www.youtube.com/watch?v=x"],
+    ["スラッシュなし", "https:www.youtube.com/watch?v=x"],
+    ["バックスラッシュ", "https:\\\\www.youtube.com\\watch"],
+    ["スキームが大文字", "HTTPS://www.youtube.com/watch?v=x"],
+    ["先頭に空白", " https://www.youtube.com/watch?v=x"],
+    ["先頭に改行", "\nhttps://www.youtube.com/watch?v=x"],
+    ["末尾に空白", "https://www.youtube.com/watch?v=x "],
+    ["末尾に改行", "https://www.youtube.com/watch?v=x\n"],
+    ["空文字", ""],
+    ["https:// だけ", "https://"],
+    ["ホストが空", "https:///watch?v=x"],
+  ])("拒否する（スキーム・形）：%s", (_label, url) => {
+    expectInvalidBody(parseStatusBody, withUrl(url), "watch_url");
+  });
+
+  test.each([
+    ["別のホスト", "https://evil.example/watch?v=x"],
+    ["YouTube のホストを前に持つ別のドメイン", "https://www.youtube.com.evil.example/watch?v=x"],
+    ["YouTube のホストをパスに持つ", "https://evil.example/www.youtube.com"],
+    ["YouTube のホストをクエリに持つ", "https://evil.example/?u=https://www.youtube.com/"],
+    ["YouTube のホストをフラグメントに持つ", "https://evil.example#www.youtube.com"],
+    ["ユーザー情報で偽装（見かけが YouTube）", "https://www.youtube.com@evil.example/"],
+    ["ユーザー情報（実のホストは YouTube）", "https://evil.example@www.youtube.com/"],
+    ["ユーザー情報にパスワード", "https://www.youtube.com:pw@evil.example/"],
+    ["バックスラッシュで偽装", "https://evil.example\\@www.youtube.com/"],
+    ["サブドメイン（m）", "https://m.youtube.com/watch?v=x"],
+    ["サブドメイン（music）", "https://music.youtube.com/watch?v=x"],
+    ["www.youtu.be", "https://www.youtu.be/x"],
+    ["末尾にドット", "https://www.youtube.com./watch?v=x"],
+    ["先頭にドット", "https://.youtube.com/watch?v=x"],
+    ["ポート 443", "https://www.youtube.com:443/watch?v=x"],
+    ["別のポート", "https://www.youtube.com:8443/watch?v=x"],
+    ["ホストが大文字", "https://WWW.YOUTUBE.COM/watch?v=x"],
+    ["似た名前（youtube.co）", "https://www.youtube.co/watch?v=x"],
+    ["似た名前（youtube.com.cn）", "https://www.youtube.com.cn/watch?v=x"],
+    ["似た名前（wwwyoutube.com）", "https://wwwyoutube.com/watch?v=x"],
+    ["似た名前（notyoutube.com）", "https://notyoutube.com/watch?v=x"],
+    ["似た名前（youtu.bee）", "https://youtu.bee/x"],
+    ["IP アドレス", "https://127.0.0.1/watch?v=x"],
+    ["ホストに空白", "https://www.youtube .com/watch?v=x"],
+    ["ホストにタブ", "https://www.you\ttube.com/watch?v=x"],
+  ])("拒否する（ホスト）：%s", (_label, url) => {
+    expectInvalidBody(parseStatusBody, withUrl(url), "watch_url");
+  });
+
+  test.each([
+    ["パスにバックスラッシュ", "https://www.youtube.com/watch\\evil"],
+    ["パスに空白", "https://www.youtube.com/watch?v=x y"],
+    ["パスに改行", "https://www.youtube.com/watch?v=x\nevil"],
+    ["パスにタブ", "https://www.youtube.com/watch?v=x\tevil"],
+    ["パスに NUL", `https://www.youtube.com/watch?v=x${String.fromCharCode(0)}`],
+    ["パスに DEL", `https://www.youtube.com/watch?v=x${String.fromCharCode(0x7f)}`],
+    ["パスに日本語（パーセント符号化されていない）", `https://www.youtube.com/${String.fromCodePoint(0x65e5)}${String.fromCodePoint(0x672c)}`],
+    ["パスに全角の空白", `https://www.youtube.com/watch?v=x${String.fromCodePoint(0x3000)}`],
+  ])("拒否する（文字）：%s", (_label, url) => {
+    expectInvalidBody(parseStatusBody, withUrl(url), "watch_url");
+  });
+
+  test.each([
+    ["数値", 1],
+    ["真偽値", true],
+    ["配列", ["https://www.youtube.com/watch?v=x"]],
+    ["オブジェクト", { url: "https://www.youtube.com/watch?v=x" }],
+    ["undefined", undefined],
+  ])("文字列でも null でもない値（%s）は、これまでどおり invalid_body", (_label, value) => {
+    expectInvalidBody(parseStatusBody, withUrl(value), "watch_url");
+  });
+
+  test("エラーの詳細に、URL の中身（ホスト・パス・資格情報）を含めない", () => {
+    let thrown: unknown;
+    try {
+      parseStatusBody(withUrl("https://user:secretpw@evil.example/private-path?token=abc123"));
+    } catch (error) {
+      thrown = error;
+    }
+    expect(isFrameError(thrown)).toBe(true);
+    const text = isFrameError(thrown) ? `${thrown.message} ${thrown.detail}` : "";
+    for (const leaked of ["evil.example", "secretpw", "private-path", "abc123", "user"]) {
+      expect({ leaked, found: text.includes(leaked) }).toEqual({ leaked, found: false });
+    }
+  });
+
+  test("検査した値は、そのまま返す（正規化・書き換えをしない）", () => {
+    const url = "https://youtu.be/dummyVideoId?si=abc#t=1";
+    expect(parseStatusBody(withUrl(url)).watch_url).toBe(url);
+  });
+});
+
 describe("parseFatalBody（5.14）", () => {
   test("致命通知の符号 10 種（列挙 fatal_code）が、すべて正しい", () => {
     const codes = ["message_too_large", "bitrate_exceeded", "hello_timeout", "invalid_ticket", "stale_epoch", "broadcast_ended", "protocol_violation", "heartbeat_lost", "publish_failed", "internal_error"];

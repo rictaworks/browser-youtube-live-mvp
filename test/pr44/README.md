@@ -13,14 +13,18 @@ test/pr44/run_all.sh          # すべて
 
 | 手順 | 確かめること |
 |---|---|
-| `scripts/test_frontend.sh core/transport core/queue core/governor core/probe core/report` | ESLint（5 ディレクトリのみ）と Jest。フレームの符号化・復号（共有ベクタの全件、64 ビットの時刻の境界、検証の順、本文の JSON の検証、base64）、送信待ち（映像を 1 枚でも破棄したら次のキーフレームまで全破棄・音声は破棄しない・滞留時間と受領応答の初期値・再接続中は積まない・安全弁）、適応制御の 7 条件（境界を表形式で）、回線の悪化と回復を模したシミュレーション、回線計測（ペース配分・タイムアウト）、状態報告（出来事を欠落なく 1 回ずつ）、契約の数値を直書きしないことの検知 |
-| `check_acceptance_tests.cjs` | Jest の JSON の結果から、受け入れ条件 89 項目に対応するテストが、下限の件数以上、成功していること。スキップ・todo・失敗が 0 件であること。ディスクにあるテストのファイルがすべて実行されていること（題の変更・削除・スキップで、黙って検査されなくならない） |
+| `scripts/test_frontend.sh core/transport core/queue core/governor core/probe core/report` | ESLint（5 ディレクトリのみ）と Jest。フレームの符号化・復号（共有ベクタの全件、64 ビットの時刻の境界、検証の順、本文の JSON の検証、base64）、送信待ち（映像を 1 枚でも破棄したら次のキーフレームまで全破棄・音声は破棄しない・滞留時間と受領応答の初期値・再接続中は積まない・安全弁）、適応制御の 7 条件（境界を表形式で）、回線の悪化と回復を模したシミュレーション、回線計測（ペース配分・タイムアウト・送信が詰まっても窓と猶予で終わること）、状態報告（出来事を欠落なく 1 回ずつ）、映像・音声の時刻が必須であること、視聴 URL が https の YouTube のホストだけであること、他のディレクトリを入口（`index.ts`）からだけ読み込むこと、契約の数値を直書きしないことの検知 |
+| `check_acceptance_tests.cjs` | Jest の JSON の結果から、受け入れ条件 109 項目に対応するテストが、下限の件数以上、成功していること。スキップ・todo・失敗が 0 件であること。ディスクにあるテストのファイルがすべて実行されていること（題の変更・削除・スキップで、黙って検査されなくならない） |
 | 型検査 | `tsc --noEmit`（プロジェクトの `tsconfig.json` を引き継ぎ、5 ディレクトリのソースとテストだけ。プロジェクト全体の型検査は CI の担当） |
 | `lib/source-policy`（#22）・`core/domain-core-rules`（#24） | 日本語のリテラルを `messages/` の外に置かない・絵文字を使わない・`alert` 系を使わない。`core/` が、実時計・タイマ・DOM・`WebSocket`・React・`window` に依存しない |
 | `scan_core_sources.cjs` | Jest の走査とは別に実装した走査。実時計・タイマ・乱数・DOM・入出力の大域の参照、相対でない `import`、日本語の文字列リテラル、`BigInt` のリテラル（`1n`。`target` が ES2017 のため型検査に失敗する）、モジュール直下の `let`、絵文字、削除系の語の実行形が無いこと。**適応制御の数値（`BitrateGovernor.ts`）と、フレームの構造の数値（`frameLayout.ts`）を直書きしていないこと**。走査器の自己検査つき |
 | `check_vectors.cjs` | 共有ベクタ（`src/contracts/ws-frame-vectors.json`）を、Jest を使わず、TypeScript の実装へ独立に通す。さらに、仕様（`ws-protocol.md` の 2 章・4 章）から別に書いた参照実装（`reference_frame.cjs`）と、TypeScript の復号を、約 20 万通りの入力（ベクタの 1 バイトの書き換え・切り詰め・延長・種別の全 256 値・本文長の端の値・2 MB の境界・ランダム）で突き合わせ、結果とエラーの符号が完全に一致すること |
+| `check_probe_stuck.cjs` | 回線計測（`UplinkProbe`）が、送信の詰まり（`sendProbe` が解決しない）で止まらないこと。素の Node で、本物のタイマ（短い窓 300 ms・猶予 200 ms）を使い、最初から・5 通目から解決しない場合に窓 + 猶予で `ProbeTimeoutError` になること、窓の終わりで打ち切った送信が、あとで拒否・解決されても、**未処理の拒否（`unhandledRejection`）・未捕捉の例外にならないこと**（Jest のサンドボックスでは観測できないため、プロセスのイベントで確かめる）、送信の失敗（拒否・同期の例外）が `ProbeSendError` になること、詰まっている間に結果が届けば返すこと、`clock.wait` を送信ごとに作らないこと |
+| `check_wire_rules.cjs` | ワイヤの 2 つの規則を、仕様から別に書いた参照実装（`reference_frame.cjs`）と、Node 標準の URL 解析で、独立に確かめる。**映像・音声の時刻は必須**（省く・`undefined`・`null` は `invalid_message`。制御メッセージ 12 種は省くと 0。参照実装のバイト列と一致）。**状態通知の視聴 URL は、https の YouTube のホスト（`www.youtube.com`・`youtube.com`・`youtu.be`）だけ**（別のスキーム・別のホスト・ユーザー情報・ポート・バックスラッシュ・制御文字などの攻撃の形を含む約 10 万通りで、受け入れた文字列が、ブラウザの URL 解析でも YouTube への https のリンクであること） |
 | `scripts/test_relay.sh ./core/frame/...` | 中継（Go。#18）が、**同じ共有ベクタ**を通すこと。ブラウザ（TypeScript）と中継（Go）のコーデックの互換を、両側から確かめる |
 | `probe_codec_in_browser.cjs` | 実ブラウザ（Playwright の Chromium）で、本物の WebSocket と本物のタイマを使い、中継の代役（`routeWebSocket`。参照実装でフレームを読み書きする）と、一連の流れを通す（下の節） |
+
+`ts_loader.cjs` は、独立した検査（`check_probe_stuck.cjs`・`check_wire_rules.cjs`）が使う、core の TypeScript をその場で読み込む共通の道具です（TypeScript が無ければ、その検査は SKIP になります）。
 
 ## 実ブラウザでの確認
 
@@ -28,7 +32,8 @@ test/pr44/run_all.sh          # すべて
 
 1. 共有ベクタの全件（valid 42 件・invalid 43 件）を、実ブラウザの `TextEncoder`・`TextDecoder`・`DataView`（BigInt）で通す
 2. 64 ビットの時刻（2^64 - 1、2^53 + 1）が、丸めずに往復する。不正な UTF-8 と BOM の本文を拒否する。`Blob` とテキストのメッセージは復号しない（WebSocket は `binaryType = "arraybuffer"` にして使う）
-3. 本物の WebSocket と本物のタイマで、接続通知（`hello`）→ 接続受理（`accepted`）→ 回線計測（3 秒間、68 個の計測データをペース配分して送り、中継の代役の規則「受けた量 × 8 ÷ 3,000」で得た 5,945 kbps を受け取る）→ プロファイルの選定（720p）→ 開始通知（`start`）→ 映像・音声 145 件（`SendQueue` を通し、中継の代役の受信と、バイト列まで一致）→ 受領応答（`ack`）→ 滞留時間の評価 → 適応制御 → 状態報告（`report`）→ 抑制指示・キーフレーム要求・状態通知・致命通知の受信・テキストのメッセージの拒否 → 終了通知（`end`）
+3. 送信が詰まる場合（`sendProbe` が 3 通目から解決しない）に、計測が窓 + 猶予（500 ms）で `ProbeTimeoutError` になる。打ち切った送信があとで拒否されても、ブラウザの `unhandledrejection` のイベントが起きない。映像・音声の時刻を省くと `invalid_message`。視聴 URL が `javascript:`・`http:`・別のホスト・ユーザー情報つきなら、`invalid_body` で破棄する
+4. 本物の WebSocket と本物のタイマで、接続通知（`hello`）→ 接続受理（`accepted`）→ 回線計測（3 秒間、68 個の計測データをペース配分して送り、中継の代役の規則「受けた量 × 8 ÷ 3,000」で得た 5,945 kbps を受け取る）→ プロファイルの選定（720p）→ 開始通知（`start`）→ 映像・音声 145 件（`SendQueue` を通し、中継の代役の受信と、バイト列まで一致）→ 受領応答（`ack`）→ 滞留時間の評価 → 適応制御 → 状態報告（`report`）→ 抑制指示・キーフレーム要求・状態通知・致命通知の受信・テキストのメッセージの拒否 → 終了通知（`end`）
 
 **Linux の Chromium では、AAC のエンコードを使えません**。この検査は、符号化済みのデータを模した固定のバイト列を送ります（エンコーダは #27 の担当）。実際の中継（Go。#20・#21）との結合、実際の YouTube への送出は、確かめていません。
 
@@ -67,8 +72,10 @@ node test/pr44/probe_codec_in_browser.cjs --repo "$PWD" --playwright-dir "<Playw
 | 本文は UTF-8、`description_b64` の base64 の往復 | `transport/base64.test.ts`・`startBody.test.ts`・`FrameCodec.test.ts` |
 | 送信待ち（`enqueue`・`backlogMs`・初期値の扱い、`dropVideoUntilNextKey`・`discardAllVideo`、音声は破棄しない、取り出しの順、再接続中は積まない、メモリの上限） | `queue/SendQueue.test.ts`（表形式の 100 件弱と、1,000 通りの性質の検査） |
 | 適応制御（`evaluate`、7 条件の境界、1 秒あたり 1 回、引き下げ幅 > 引き上げ幅、抑制指示の優先、状態、時刻の逆行、決定的、シミュレーション） | `governor/BitrateGovernor.test.ts`・`BitrateGovernor.simulation.test.ts`・`BitrateGovernor.constants.test.ts` |
-| 回線計測（`measure(channel, clock)`、3 秒・6,000 kbps・32 KB、ペースの計算は純粋、タイムアウト） | `probe/*.test.ts`、実ブラウザ（本物のタイマ） |
+| 回線計測（`measure(channel, clock)`、3 秒・6,000 kbps・32 KB、ペースの計算は純粋、タイムアウト。送信が詰まっても窓 + 猶予で終わる） | `probe/*.test.ts`（`ManualClock` の仮想時間）、`check_probe_stuck.cjs`、実ブラウザ（本物のタイマ） |
 | 状態報告（出来事を欠落なく 1 回ずつ、`detail` は符号と数値のみ） | `report/ReportBuilder.test.ts` |
+| 映像・音声は時刻が必須（省くと `invalid_message`）。視聴 URL は https の YouTube のホストだけ（PR #44 のレビュー S1・S2） | `transport/frameLayout.test.ts`・`FrameCodec.test.ts`・`bodies.test.ts`、`check_wire_rules.cjs`、実ブラウザ |
+| 他のディレクトリは入口（`index.ts`）からだけ読み込む（PR #44 のレビュー S4）。状態報告の本文の凍結は、入れ子まで届く | `report/entryPointImports.test.ts`・`report/ReportBuilder.test.ts` |
 | すべて副作用なし、`core/` が DOM・WebSocket・React を参照しない、ESLint・`tsc`・Jest が緑 | `core/domain-core-rules`、`scan_core_sources.cjs`、型検査、ESLint |
 
 ## 前提

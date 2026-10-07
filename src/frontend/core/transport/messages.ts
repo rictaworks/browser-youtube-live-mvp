@@ -23,6 +23,12 @@ export type BrowserEndReason = (typeof BROWSER_END_REASON_VALUES)[number];
 export const STATUS_WARNING_VALUES = Object.freeze(["youtube_stream_unhealthy"] as const);
 export type StatusWarning = (typeof STATUS_WARNING_VALUES)[number];
 
+/**
+ * 視聴 URL（status の watch_url。ws-protocol.md の 5.13）として受け取るホスト。https の YouTube だけ（契約の例は https://www.youtube.com/watch?v=...）。
+ * 視聴 URL は画面のリンクに使われ得る。中継から届いた値を、そのまま通さない（javascript: や別のドメインは、invalid_body で破棄する）。
+ */
+export const WATCH_URL_HOSTS = Object.freeze(["www.youtube.com", "youtube.com", "youtu.be"] as const);
+
 // ---------------------------------------------------------------------------
 // 本文（JSON）。ブラウザ → 中継
 // ---------------------------------------------------------------------------

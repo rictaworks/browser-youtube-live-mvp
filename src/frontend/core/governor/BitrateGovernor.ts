@@ -32,7 +32,7 @@
 
 import { ADAPTIVE_CONDITION_VALUES, LIMITS } from "../contract";
 import type { AdaptiveCondition } from "../contract";
-import type { BrowserEvent } from "../report/types";
+import type { BrowserEvent } from "../report";
 import type { DegradedChange, GovernorDecision, GovernorDiagnostics, GovernorInput, ReconnectCause } from "./types";
 
 const CONDITIONS = LIMITS.adaptive.conditions;

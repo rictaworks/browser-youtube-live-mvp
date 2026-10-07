@@ -26,13 +26,33 @@ export interface RawFrame {
   readonly body: Uint8Array;
 }
 
-/** 符号化するフレームの内容。keyframe と timestampUs を省くと、false と 0（制御メッセージ）。 */
-export interface RawFrameInput {
-  readonly type: WsMessageType;
+/** 時刻（メディアクロック）を持つメッセージの種別。映像と音声だけ（ws-protocol.md の 2 章）。 */
+export type MediaMessageType = "video" | "audio";
+
+/** 制御メッセージの種別（映像・音声以外の 12 種）。ヘッダの時刻の欄は 0。 */
+export type ControlMessageType = Exclude<WsMessageType, MediaMessageType>;
+
+/** 制御メッセージの符号化の内容。keyframe と timestampUs を省くと、false と 0。 */
+export interface ControlFrameInput {
+  readonly type: ControlMessageType;
   readonly keyframe?: boolean;
   readonly timestampUs?: TimestampUs;
   readonly body: Uint8Array;
 }
+
+/**
+ * 映像・音声の符号化の内容。timestampUs は必須（省くと、符号化は invalid_message）。keyframe を省くと false。
+ * 時刻を 0 で補うと、中継の TimeGuard が「同じ種別で時刻が逆行するフレーム」として 2 枚目以降を破棄し、ブラウザには何も見えないまま配信が止まる。
+ */
+export interface MediaFrameInput {
+  readonly type: MediaMessageType;
+  readonly keyframe?: boolean;
+  readonly timestampUs: TimestampUs;
+  readonly body: Uint8Array;
+}
+
+/** 符号化するフレームの内容。種別で、時刻の扱いが分かれる（映像・音声は必須、制御メッセージは省略可）。 */
+export type RawFrameInput = ControlFrameInput | MediaFrameInput;
 
 const HEADER_BYTES = LIMITS.ws_frame.header_bytes;
 const MAX_MESSAGE_BYTES = LIMITS.ws_frame.max_message_bytes;
@@ -41,6 +61,9 @@ const MAGIC = LIMITS.ws_frame.magic;
 const VERSION = LIMITS.ws_frame.version;
 const KEYFRAME_MASK = 1 << LIMITS.ws_frame.keyframe_attribute_bit;
 const DIRECTIONS: readonly FrameDirection[] = LIMITS.ws_frame.directions;
+
+/** 時刻を持つ種別（映像・音声）。型の MediaMessageType と同じ 2 つ。 */
+const MEDIA_MESSAGE_TYPES: readonly WsMessageType[] = ["video", "audio"];
 
 const ZERO = BigInt(0);
 const MAX_UINT64 = (BigInt(1) << BigInt(64)) - BigInt(1);
@@ -79,8 +102,12 @@ export function directionOfType(type: WsMessageType): FrameDirection | undefined
   return TYPE_TABLES.byName.get(type)?.direction;
 }
 
-function toTimestamp(value: TimestampUs | undefined): bigint {
+/** 時刻を、ヘッダの 8 バイトの値にする。required（映像・音声）で省いたときは、0 で補わず、invalid_message。 */
+function toTimestamp(value: TimestampUs | undefined, required: boolean): bigint {
   if (value === undefined) {
+    if (required) {
+      throw new FrameError("invalid_message", "a video or audio frame needs a timestamp (it is never defaulted to 0)");
+    }
     return ZERO;
   }
   if (typeof value === "bigint") {
@@ -101,6 +128,7 @@ function toTimestamp(value: TimestampUs | undefined): bigint {
 /**
  * フレームを、1 メッセージのバイト列にする。種別は、契約の 14 種のどれか（でなければ unknown_type）。方向は検査しない（中継の Go の Encode と同じ。
  * ブラウザが送る 7 種に絞るのは FrameCodec）。全体（17 + 本文）が 2,097,152 バイト以下（超えれば too_large）。属性の予約ビットは 0。
+ * 時刻：映像・音声は必須（省く、または bigint と数値以外は invalid_message。0 を黙って補わない）。制御メッセージは省略でき、省くと 0。
  * 本文は、新しい領域へコピーする（返したバイト列を書き換えても、本文は変わらない）。
  */
 export function encodeRawFrame(input: RawFrameInput): Uint8Array {
@@ -114,7 +142,7 @@ export function encodeRawFrame(input: RawFrameInput): Uint8Array {
   if (input.keyframe !== undefined && typeof input.keyframe !== "boolean") {
     throw new FrameError("invalid_message", `keyframe must be a boolean: ${typeof input.keyframe}`);
   }
-  const timestampUs = toTimestamp(input.timestampUs);
+  const timestampUs = toTimestamp(input.timestampUs, MEDIA_MESSAGE_TYPES.includes(input.type));
   const total = HEADER_BYTES + input.body.length;
   if (total > MAX_MESSAGE_BYTES) {
     throw new FrameError("too_large", `message would be ${total} bytes, the limit is ${MAX_MESSAGE_BYTES}`);

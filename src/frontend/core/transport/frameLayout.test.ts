@@ -109,14 +109,14 @@ describe("encodeRawFrame: ヘッダの構造", () => {
   });
 
   test.each(TYPE_TABLE)("種別 %s の符号は %i（10 進数。方向 %s）", (name, code) => {
-    const encoded = encodeRawFrame({ type: name, body: new Uint8Array(0) });
+    const encoded = encodeRawFrame({ type: name, timestampUs: 0, body: new Uint8Array(0) });
     expect(encoded[3]).toBe(code);
   });
 
   test("属性：bit0 がキーフレーム。予約のビット（bit1 から bit7）は 0（送信側は 0 にする）", () => {
-    expect(encodeRawFrame({ type: "video", keyframe: true, body: new Uint8Array(0) })[4]).toBe(0x01);
-    expect(encodeRawFrame({ type: "video", keyframe: false, body: new Uint8Array(0) })[4]).toBe(0x00);
-    expect(encodeRawFrame({ type: "video", body: new Uint8Array(0) })[4]).toBe(0x00);
+    expect(encodeRawFrame({ type: "video", keyframe: true, timestampUs: 0, body: new Uint8Array(0) })[4]).toBe(0x01);
+    expect(encodeRawFrame({ type: "video", keyframe: false, timestampUs: 0, body: new Uint8Array(0) })[4]).toBe(0x00);
+    expect(encodeRawFrame({ type: "video", timestampUs: 0, body: new Uint8Array(0) })[4]).toBe(0x00);
   });
 
   test.each([
@@ -133,7 +133,14 @@ describe("encodeRawFrame: ヘッダの構造", () => {
     expect(Buffer.from(encoded.subarray(5, 13)).toString("hex")).toBe(expectedHex);
   });
 
-  test("時刻を省くと 0。Number（安全整数）でも渡せる", () => {
+  test("制御メッセージ（映像・音声以外の 12 種）は、時刻を省くと 0（ヘッダの時刻の欄は 0）", () => {
+    const controlTypes = ["hello", "probe", "start", "report", "end", "accepted", "probe_result", "ack", "keyframe_request", "throttle", "status", "fatal"] as const;
+    for (const type of controlTypes) {
+      expect(Array.from(encodeRawFrame({ type, body: new Uint8Array(0) }).subarray(5, 13))).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
+    }
+  });
+
+  test("時刻は、Number（安全整数）でも渡せる", () => {
     expect(Array.from(encodeRawFrame({ type: "hello", body: new Uint8Array(0) }).subarray(5, 13))).toEqual([0, 0, 0, 0, 0, 0, 0, 0]);
     expect(Buffer.from(encodeRawFrame({ type: "audio", timestampUs: 33_333, body: new Uint8Array(0) }).subarray(5, 13)).toString("hex")).toBe("0000000000008235");
     expect(Buffer.from(encodeRawFrame({ type: "audio", timestampUs: Number.MAX_SAFE_INTEGER, body: new Uint8Array(0) }).subarray(5, 13)).toString("hex")).toBe("001fffffffffffff");
@@ -154,6 +161,23 @@ describe("encodeRawFrame: 拒否（黙って切り詰めたり、丸めたりし
     expectFrameError(() => encodeRawFrame({ type: "audio", timestampUs: timestamp, body: new Uint8Array(0) }), "invalid_message");
   });
 
+  test.each(["video", "audio"] as const)(
+    "%s は、時刻を省く（undefined・null も）と invalid_message（黙って 0 にしない。中継の TimeGuard は、2 枚目以降を時刻の逆行として破棄し、ブラウザには何も見えないため）",
+    (type) => {
+      expectFrameError(() => encodeRawFrame({ type, body: new Uint8Array(0) } as never), "invalid_message");
+      expectFrameError(() => encodeRawFrame({ type, timestampUs: undefined, body: new Uint8Array(0) } as never), "invalid_message");
+      expectFrameError(() => encodeRawFrame({ type, timestampUs: null, body: new Uint8Array(0) } as never), "invalid_message");
+    },
+  );
+
+  test("型の上でも、映像・音声は時刻が必須（省いた呼び出しは、tsc で拒否される。ここは、その検査が働いていることの確認）", () => {
+    // @ts-expect-error 映像には timestampUs が要る（省くと型検査で失敗する）
+    const omittedVideo: Parameters<typeof encodeRawFrame>[0] = { type: "video", body: new Uint8Array(0) };
+    // @ts-expect-error 音声にも timestampUs が要る
+    const omittedAudio: Parameters<typeof encodeRawFrame>[0] = { type: "audio", body: new Uint8Array(0) };
+    expect([omittedVideo.type, omittedAudio.type]).toEqual(["video", "audio"]);
+  });
+
   test("全体がちょうど 2,097,152 バイト（本文 2,097,135 バイト）は符号化できる。1 バイト超えると too_large", () => {
     expect(encodeRawFrame({ type: "probe", body: new Uint8Array(MAX_MESSAGE_BYTES - HEADER_BYTES) }).length).toBe(MAX_MESSAGE_BYTES);
     expectFrameError(() => encodeRawFrame({ type: "probe", body: new Uint8Array(MAX_MESSAGE_BYTES - HEADER_BYTES + 1) }), "too_large");
@@ -165,7 +189,7 @@ describe("encodeRawFrame: 拒否（黙って切り詰めたり、丸めたりし
     ["大文字の名前", "HELLO"],
     ["undefined", undefined],
   ])("未知の種別（%s）は unknown_type", (_label, type) => {
-    expectFrameError(() => encodeRawFrame({ type: type as unknown as RawFrame["type"], body: new Uint8Array(0) }), "unknown_type");
+    expectFrameError(() => encodeRawFrame({ type: type as never, body: new Uint8Array(0) }), "unknown_type");
   });
 
   test.each([
@@ -180,7 +204,7 @@ describe("encodeRawFrame: 拒否（黙って切り詰めたり、丸めたりし
   });
 
   test("キーフレームの指定が真偽値でない場合は invalid_message", () => {
-    expectFrameError(() => encodeRawFrame({ type: "video", keyframe: 1 as unknown as boolean, body: new Uint8Array(0) }), "invalid_message");
+    expectFrameError(() => encodeRawFrame({ type: "video", keyframe: 1 as unknown as boolean, timestampUs: 0, body: new Uint8Array(0) }), "invalid_message");
   });
 
   test("エラーの詳細に、本文の中身を含めない（接続チケットなどが入り得る）", () => {

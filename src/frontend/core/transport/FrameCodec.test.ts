@@ -131,8 +131,15 @@ describe("encode: video（映像）", () => {
     ["負の数", -1],
     ["小数", 33_333.5],
     ["NaN", Number.NaN],
-  ])("時刻が不正（%s）は invalid_message", (_label, timestampUs) => {
-    expectFrameError(() => codec.encode({ type: "video", timestampUs, keyframe: false, payload }), "invalid_message");
+    ["null", null],
+    ["undefined（省いた）", undefined],
+    ["文字列", "33333"],
+  ])("時刻が不正（%s）は invalid_message（黙って 0 にしない）", (_label, timestampUs) => {
+    expectFrameError(() => codec.encode({ type: "video", timestampUs, keyframe: false, payload } as unknown as OutboundMessage), "invalid_message");
+  });
+
+  test("時刻を持たない映像は、送らない（invalid_message）。中継は、時刻の逆行として破棄し、ブラウザには何も見えないため", () => {
+    expectFrameError(() => codec.encode({ type: "video", keyframe: true, payload } as unknown as OutboundMessage), "invalid_message");
   });
 
   test("符号化データが空でも、符号化できる（長さの検査だけ。中身は解釈しない）", () => {
@@ -145,6 +152,13 @@ describe("encode: video（映像）", () => {
 });
 
 describe("encode: audio（音声）", () => {
+  test("時刻を省いた（undefined・null も）音声は、送らない（invalid_message）", () => {
+    const payload = Uint8Array.from([0x21, 0x10, 0x04, 0x60]);
+    expectFrameError(() => codec.encode({ type: "audio", payload } as unknown as OutboundMessage), "invalid_message");
+    expectFrameError(() => codec.encode({ type: "audio", timestampUs: undefined, payload } as unknown as OutboundMessage), "invalid_message");
+    expectFrameError(() => codec.encode({ type: "audio", timestampUs: null, payload } as unknown as OutboundMessage), "invalid_message");
+  });
+
   test("属性は 0（音声にキーフレームは無い）。時刻と符号化データを載せる", () => {
     const payload = Uint8Array.from([0x21, 0x10, 0x04, 0x60]);
     const encoded = codec.encode({ type: "audio", timestampUs: 23_220, payload });
@@ -302,7 +316,7 @@ describe("decode: ヘッダの検証（ws-protocol.md の 4 章の順）は、Fr
     ["識別子の誤り", good.map((value, index) => (index === 0 ? 0 : value)), "invalid_magic"],
     ["版の誤り", good.map((value, index) => (index === 2 ? 2 : value)), "unsupported_version"],
     ["未知の種別", good.map((value, index) => (index === 3 ? 0xfe : value)), "unknown_type"],
-    ["方向違い（ブラウザ → 中継の種別）", encodeRawFrame({ type: "video", body: new Uint8Array(0) }), "wrong_direction"],
+    ["方向違い（ブラウザ → 中継の種別）", encodeRawFrame({ type: "video", timestampUs: 0, body: new Uint8Array(0) }), "wrong_direction"],
     ["長さの不一致（本文が足りない）", good.subarray(0, good.length - 1), "length_mismatch"],
     ["長さの不一致（本文が多い）", Uint8Array.from([...good, 0]), "length_mismatch"],
     ["2 MB 超（宣言）", Uint8Array.from([...good.subarray(0, 13), 0xff, 0xff, 0xff, 0xff]), "too_large"],
@@ -330,6 +344,23 @@ describe("decode: 本文（JSON）の不備は、invalid_body（そのメッセ�
     ["ひどく深い入れ子", utf8(`${"[".repeat(100_000)}${"]".repeat(100_000)}`)],
   ])("%s", (_label, body) => {
     expectFrameError(() => codec.decode(frameOf(body)), "invalid_body");
+  });
+
+  test.each([
+    ["javascript:", "javascript:alert(1)"],
+    ["http", "http://www.youtube.com/watch?v=x"],
+    ["別のホスト", "https://evil.example/watch?v=x"],
+    ["ユーザー情報で偽装", "https://www.youtube.com@evil.example/"],
+  ])("status の視聴 URL が、https の YouTube のホストでない（%s）。invalid_body で破棄する（画面へ渡さない）", (_label, watchUrl) => {
+    const body = utf8(JSON.stringify({ state: "live", watch_url: watchUrl, warning: null, time_limit_notice_seconds: null, end_reason: null }));
+    expectFrameError(() => codec.decode(frameOf(body)), "invalid_body");
+  });
+
+  test("status の視聴 URL が YouTube のもの（www.youtube.com・youtube.com・youtu.be）なら、復号できる", () => {
+    for (const watchUrl of ["https://www.youtube.com/watch?v=dummyVideoId", "https://youtube.com/watch?v=dummyVideoId", "https://youtu.be/dummyVideoId"]) {
+      const body = utf8(JSON.stringify({ state: "live", watch_url: watchUrl, warning: null, time_limit_notice_seconds: null, end_reason: null }));
+      expect(codec.decode(frameOf(body))).toEqual({ type: "status", body: { state: "live", watch_url: watchUrl, warning: null, time_limit_notice_seconds: null, end_reason: null } });
+    }
   });
 
   test("エラーの詳細・メッセージに、本文の中身（視聴 URL など）を含めない", () => {

@@ -8,6 +8,9 @@ export interface ProbeChannel {
   /**
    * 計測データを 1 つ送る。同期でも、非同期（Promise）でもよい。非同期なら、そのデータを、送信側が受け付けてから（送信の詰まりが解けてから）解決する。
    * 失敗は、例外（Promise なら拒否）で返す（黙って捨てない）。
+   * 解決しない送信（bufferedAmount が減らない不通の回線など）があっても、measure は終わる：計測の窓（既定 3 秒）の終わりで、その送信を打ち切る
+   * （打ち切ったあとの解決・拒否は、無視する）。打ち切るために、送信側へ通知はしない（キャンセルの手段は無い）。
+   * 窓の終わりまでの失敗（拒否・同期の例外）は、measure が ProbeSendError にする。
    */
   sendProbe(bytes: Uint8Array): void | Promise<void>;
 

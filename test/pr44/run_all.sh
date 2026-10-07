@@ -10,9 +10,12 @@
 #   4. 既存の方針の検査（#22 の lib/source-policy：日本語の直書き・絵文字・alert 系。#24 の core/domain-core-rules：実時計・タイマ・DOM・WebSocket・React への依存なし）
 #   5. ソースの走査（scan_core_sources.cjs。Jest の走査とは別に実装。契約の数値の直書きも検知。走査器の自己検査つき）
 #   6. 共有ベクタの独立した検査と、参照実装との差分テスト（check_vectors.cjs。約 20 万通り）
-#   7. 中継（Go）が、同じ共有ベクタを通すこと（scripts/test_relay.sh ./core/frame/...）。ブラウザと中継のコーデックの互換を、両側から確かめる
-#   8. 実ブラウザ（Playwright の Chromium）：本物の WebSocket・タイマで、接続 -> 計測 -> 開始 -> 映像・音声 -> 受領応答 -> 状態報告 -> 終了を通す（probe_codec_in_browser.cjs）
-#      Playwright が無ければ SKIP（確認できなかった）。README.md に導入の手順
+#   7. 回線計測が、送信の詰まり（sendProbe が解決しない）で止まらないこと（check_probe_stuck.cjs。素の Node。未処理の拒否・未捕捉の例外をプロセスのイベントで観測する）
+#   8. ワイヤの規則の独立した検査（check_wire_rules.cjs）：映像・音声の時刻は必須（省くと invalid_message）・視聴 URL は https の YouTube のホストだけ
+#      （Node 標準の URL 解析を判定に使い、攻撃の形の約 10 万通りで、受け入れた文字列が安全なものだけであることを確かめる）
+#   9. 中継（Go）が、同じ共有ベクタを通すこと（scripts/test_relay.sh ./core/frame/...）。ブラウザと中継のコーデックの互換を、両側から確かめる
+#  10. 実ブラウザ（Playwright の Chromium）：本物の WebSocket・タイマで、接続 -> 計測 -> 開始 -> 映像・音声 -> 受領応答 -> 状態報告 -> 終了を通す（probe_codec_in_browser.cjs）。
+#      送信が詰まる場合（本物のタイマ・unhandledrejection のイベント）も確かめる。Playwright が無ければ SKIP（確認できなかった）。README.md に導入の手順
 #
 # 使い方: このファイルを実行する（リポジトリのどこからでもよい。場所は、このファイル自身から解決する）
 #   事前に scripts/setup_dev_env.sh で .env を作る
@@ -140,6 +143,8 @@ run "Domain Core の規則の走査（#24 の core/domain-core-rules。実時計
 
 run_optional "ソースの走査（scan_core_sources.cjs）" node "$HERE/scan_core_sources.cjs" "$ROOT_DIR"
 run_optional "共有ベクタの独立した検査と、参照実装との差分テスト（check_vectors.cjs）" node "$HERE/check_vectors.cjs" "$ROOT_DIR"
+run_optional "回線計測が、送信の詰まりで止まらないこと（check_probe_stuck.cjs。未処理の拒否を観測する）" node "$HERE/check_probe_stuck.cjs" "$ROOT_DIR"
+run_optional "ワイヤの規則の独立した検査（check_wire_rules.cjs。映像・音声の時刻は必須・視聴 URL は https の YouTube のホストだけ）" node "$HERE/check_wire_rules.cjs" "$ROOT_DIR"
 run "中継（Go）が、同じ共有ベクタを通すこと（scripts/test_relay.sh ./core/frame/...）" scripts/test_relay.sh ./core/frame/...
 run_optional "実ブラウザ（Playwright の Chromium）での一連の流れ（probe_codec_in_browser.cjs）" node "$HERE/probe_codec_in_browser.cjs" --repo "$ROOT_DIR"
 

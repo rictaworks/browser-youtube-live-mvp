@@ -108,6 +108,84 @@
     // WebSocket の既定（binaryType が blob）で届く Blob は、そのままでは復号しない（アダプターが arraybuffer にする）
     check(errorCode(function () { codec.decode(new Blob([encoded])); }) === 'invalid_message', 'Blob は復号しない（invalid_message）。WebSocket は binaryType = arraybuffer にして使う');
     check(errorCode(function () { codec.decode('{"video_us":1}'); }) === 'invalid_message', 'テキストのメッセージは復号しない（invalid_message）');
+    // 映像・音声は、時刻が必須（省くと、黙って 0 にせず、invalid_message）。制御メッセージは、省くと 0
+    check(errorCode(function () { transport.encodeRawFrame({ type: 'video', body: new Uint8Array(0) }); }) === 'invalid_message', '映像の時刻を省くと invalid_message（黙って 0 にしない）');
+    check(errorCode(function () { codec.encode({ type: 'audio', payload: new Uint8Array(0) }); }) === 'invalid_message', '音声の時刻を省くと invalid_message（FrameCodec.encode も同じ）');
+    check(transport.decodeRawFrame(transport.encodeRawFrame({ type: 'hello', body: new Uint8Array(0) }), 'browser_to_relay').timestampUs === BigInt(0), '制御メッセージは、時刻を省くと 0');
+    // 視聴 URL は、https の YouTube のホスト（www.youtube.com・youtube.com・youtu.be）だけ。それ以外は、invalid_body で破棄する
+    function statusFrame(watchUrl) {
+      return transport.encodeRawFrame({ type: 'status', body: new TextEncoder().encode(JSON.stringify({ state: 'live', watch_url: watchUrl, warning: null, time_limit_notice_seconds: null, end_reason: null })) });
+    }
+    check(codec.decode(statusFrame('https://youtu.be/dummyVideoId')).body.watch_url === 'https://youtu.be/dummyVideoId', 'YouTube の視聴 URL（youtu.be）は受け取る');
+    ['javascript:alert(1)', 'http://www.youtube.com/watch?v=x', 'https://www.youtube.com@evil.example/', 'https://evil.example/watch?v=x'].forEach(function (url) {
+      check(errorCode(function () { codec.decode(statusFrame(url)); }) === 'invalid_body', '視聴 URL ' + url + ' は invalid_body で破棄する');
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // 2b. 送信が詰まる（bufferedAmount が減らない不通の回線）：本物のタイマで、計測が窓 + 猶予で終わる。
+  //     打ち切った送信が、あとで拒否されても、未処理の拒否（unhandledrejection）にならない（実ブラウザのイベントで確かめる）
+  // -------------------------------------------------------------------------
+  async function runProbeStallChecks() {
+    var probeModule = window.__core.load('probe');
+    var windowMs = 300;
+    var graceMs = 200;
+    var unhandled = [];
+    function onUnhandled(event) {
+      unhandled.push(String(event.reason && event.reason.message ? event.reason.message : event.reason));
+    }
+    window.addEventListener('unhandledrejection', onUnhandled);
+    var rejectLate;
+    var calls = 0;
+    var waits = 0;
+    var channel = {
+      sendProbe: function () {
+        var index = calls;
+        calls += 1;
+        if (index < 2) {
+          return Promise.resolve();
+        }
+        return new Promise(function (resolve, reject) {
+          rejectLate = reject;
+        });
+      },
+      onProbeResult: function () {
+        return function () {};
+      },
+    };
+    var clock = {
+      nowMs: function () {
+        return performance.now();
+      },
+      wait: function (milliseconds) {
+        waits += 1;
+        return new Promise(function (resolve) {
+          setTimeout(resolve, milliseconds);
+        });
+      },
+    };
+    var startedAt = performance.now();
+    var failure = null;
+    var value;
+    try {
+      value = await new probeModule.UplinkProbe({ durationMs: windowMs, resultGraceMs: graceMs }).measure(channel, clock);
+    } catch (error) {
+      failure = error;
+    }
+    var elapsedMs = performance.now() - startedAt;
+    check(failure instanceof probeModule.ProbeTimeoutError, '送信が 3 通目から解決しない：計測が ProbeTimeoutError で終わる', failure === null ? '値 ' + value : String(failure));
+    check(failure !== null && failure.waitedMs === windowMs + graceMs && failure.sentMessages === 2 && failure.stalledMessageIndex === 2, '送信が詰まった番号（2）と、送れた数（2）を持つ', failure === null ? '' : JSON.stringify({ waitedMs: failure.waitedMs, sentMessages: failure.sentMessages, stalledMessageIndex: failure.stalledMessageIndex }));
+    check(elapsedMs >= windowMs + graceMs - 30 && elapsedMs < windowMs + graceMs + 1000, '窓 + 猶予（' + (windowMs + graceMs) + ' ms）で終わる：' + Math.round(elapsedMs) + ' ms');
+    check(calls === 3, '止まった送信のあとに、次の送信をしない（送信の試み ' + calls + ' 回）');
+    check(waits <= calls + 2, 'clock.wait は、送信ごとに作らない（' + waits + ' 回。送信の試み ' + calls + ' 回）');
+    if (typeof rejectLate === 'function') {
+      rejectLate(new Error('late socket failure after the abort'));
+    }
+    await new Promise(function (resolve) {
+      setTimeout(resolve, 200);
+    });
+    window.removeEventListener('unhandledrejection', onUnhandled);
+    check(unhandled.length === 0, '打ち切った送信が、あとで拒否されても、未処理の拒否（unhandledrejection）にならない', unhandled.join(' / '));
   }
 
   // -------------------------------------------------------------------------
@@ -293,6 +371,7 @@
   window.runChecks = async function (vectors) {
     runVectors(vectors);
     runPlatformChecks();
+    await runProbeStallChecks();
     var session = await runSession();
     return { results: results, problems: problems, session: session };
   };

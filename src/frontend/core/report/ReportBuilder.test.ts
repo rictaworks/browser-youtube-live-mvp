@@ -9,6 +9,7 @@
 import { BitrateGovernor } from "../governor";
 import { Problems, seededRandom } from "../testing/helpers";
 import { FrameCodec, decodeRawFrame, parseReportBody } from "../transport";
+import type { ReportEvent } from "../transport";
 import { DEFAULT_MAX_EVENTS_PER_REPORT, ReportBuilder } from "./ReportBuilder";
 import type { BrowserEvent } from "./types";
 
@@ -234,6 +235,46 @@ describe("出来事は、欠落なく 1 回ずつ送る（prepare -> 送信 -> c
     expect(second.body).not.toBe(first.body);
     builder.commit(second);
     expect(first.body.events).toHaveLength(1);
+  });
+});
+
+describe("prepare が返す本文の凍結は、入れ子（出来事の配列・各出来事・detail）まで届く", () => {
+  test("どの階層も、書き換えられない（受け取った側が、本文を書き換えて、待ちの出来事や次の報告を壊せない）", () => {
+    const builder = new ReportBuilder();
+    builder.record({ kind: "bitrate_down", fromKbps: 3300, toKbps: 3000 });
+    builder.record({ kind: "degraded_started" });
+    const { body } = builder.prepare(LIVE);
+    const [withDetail, withoutDetail] = body.events;
+    expect(Object.isFrozen(body)).toBe(true);
+    expect(Object.isFrozen(body.events)).toBe(true);
+    expect(Object.isFrozen(withDetail)).toBe(true);
+    expect(Object.isFrozen(withDetail.detail)).toBe(true);
+    expect(Object.isFrozen(withoutDetail)).toBe(true);
+    expect(() => {
+      (body as { backlog_ms: number }).backlog_ms = 1;
+    }).toThrow(TypeError);
+    expect(() => {
+      (body.events as ReportEvent[]).push({ kind: "degraded_cleared" });
+    }).toThrow(TypeError);
+    expect(() => {
+      (withDetail as { kind: string }).kind = "video_dropped";
+    }).toThrow(TypeError);
+    expect(() => {
+      (withDetail.detail as { from_kbps: number }).from_kbps = 1;
+    }).toThrow(TypeError);
+    expect(wire(body)).toBe(
+      '{"backlog_ms":120,"dropped_video_frames":0,"target_kbps":4500,"state":"live","events":[{"kind":"bitrate_down","detail":{"from_kbps":3300,"to_kbps":3000}},{"kind":"degraded_started"}]}',
+    );
+  });
+
+  test("本文は、待ちの出来事とも、渡された snapshot とも共有しない（本文を壊しても、次の prepare に影響しない）", () => {
+    const builder = new ReportBuilder();
+    builder.record({ kind: "bitrate_up", fromKbps: 3000, toKbps: 3300 });
+    const first = builder.prepare(LIVE);
+    const second = builder.prepare(LIVE);
+    expect(second.body.events[0]).not.toBe(first.body.events[0]);
+    expect(second.body.events[0].detail).not.toBe(first.body.events[0].detail);
+    expect(wire(second.body)).toBe(wire(first.body));
   });
 });
 

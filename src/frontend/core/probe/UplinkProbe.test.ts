@@ -17,12 +17,20 @@ class ManualClock implements ProbeClock {
   private now = 0;
   private sequence = 0;
   private timers: Array<{ at: number; sequence: number; fire: () => void }> = [];
+  /** wait を呼んだ回数（送信ごとに、待ちを作っていないことの検査に使う） */
+  waitCalls = 0;
 
   nowMs(): number {
     return this.now;
   }
 
+  /** まだ発火していない待ちの数（タイマの残りの検査に使う）。テスト側の予約（at）も含む。 */
+  get pendingTimers(): number {
+    return this.timers.length;
+  }
+
   wait(milliseconds: number): Promise<void> {
+    this.waitCalls += 1;
     return new Promise((resolve) => {
       this.timers.push({ at: this.now + Math.max(0, milliseconds), sequence: this.sequence++, fire: resolve });
     });
@@ -306,6 +314,176 @@ describe("UplinkProbe.measure：送信の失敗（黙って続けない）", () 
     expect(channel.sent.length).toBeGreaterThanOrEqual(29);
     expect(channel.sent.length).toBeLessThanOrEqual(31);
     expect(Math.max(...channel.sent.map((item) => item.atMs))).toBeLessThan(WINDOW_MS);
+  });
+});
+
+describe("UplinkProbe.measure：送信が詰まる（sendProbe が解決しない。bufferedAmount が減らない不通の回線でも、終わる）", () => {
+  /** 解決も拒否もしない Promise（送信が詰まったまま） */
+  const stuck = (): Promise<void> => new Promise<void>(() => undefined);
+
+  test("最初の送信から解決しない：窓（3 秒）の終わりで送信を打ち切り、猶予（5 秒）を待って、8,000 ms に ProbeTimeoutError（無限に待たない）", async () => {
+    const clock = new ManualClock();
+    const channel = new FakeChannel(clock, stuck);
+    const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+    expect(outcome.error).toBeInstanceOf(ProbeTimeoutError);
+    expect(outcome.settledAtMs).toBe(WINDOW_MS + DEFAULT_RESULT_GRACE_MS);
+    expect(channel.sent).toHaveLength(1);
+    expect(channel.listeners).toBe(0);
+    const error = outcome.error as ProbeTimeoutError;
+    expect(error.sentMessages).toBe(0);
+    expect(error.stalledMessageIndex).toBe(0);
+    expect(error.message).toMatch(/message 0/);
+  });
+
+  test("5 件目から解決しない：4 件は送れ、5 件目で詰まる。窓の終わりで打ち切り、8,000 ms に ProbeTimeoutError。以後は送らない", async () => {
+    const clock = new ManualClock();
+    const channel = new FakeChannel(clock, (_bytes, self) => (self.sent.length >= 5 ? stuck() : undefined));
+    const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+    expect(outcome.error).toBeInstanceOf(ProbeTimeoutError);
+    expect(outcome.settledAtMs).toBe(WINDOW_MS + DEFAULT_RESULT_GRACE_MS);
+    expect(channel.sent).toHaveLength(5);
+    const error = outcome.error as ProbeTimeoutError;
+    expect(error.sentMessages).toBe(4);
+    expect(error.stalledMessageIndex).toBe(4);
+    expect(channel.listeners).toBe(0);
+  });
+
+  test("詰まりがなければ stalledMessageIndex は無い（結果が来なかっただけのタイムアウト）", async () => {
+    const clock = new ManualClock();
+    const outcome = await clock.run(new UplinkProbe().measure(new FakeChannel(clock), clock));
+    expect((outcome.error as ProbeTimeoutError).stalledMessageIndex).toBeUndefined();
+  });
+
+  test("詰まっている途中でも、猶予のうちに結果が届けば、その値を返す（中継は、受けた分から結果を作る）", async () => {
+    const clock = new ManualClock();
+    const channel = new FakeChannel(clock, (_bytes, self) => (self.sent.length >= 5 ? stuck() : undefined));
+    clock.at(4000, () => channel.deliver(1500));
+    const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+    expect(outcome.value).toBe(1500);
+    expect(outcome.settledAtMs).toBe(4000);
+  });
+
+  test("詰まっている途中で、窓の終わりより前に結果が届いても（想定外）、そこで終わる", async () => {
+    const clock = new ManualClock();
+    const channel = new FakeChannel(clock, (_bytes, self) => (self.sent.length >= 5 ? stuck() : undefined));
+    clock.at(1000, () => channel.deliver(800));
+    const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+    expect(outcome.value).toBe(800);
+    expect(outcome.settledAtMs).toBe(1000);
+  });
+
+  test("窓の終わりにかかった送信（1 件の送信に 100 ms かかる回線）は、そこで打ち切る。詰まりとして、エラーに残す（結果が来なければ）", async () => {
+    const clock = new ManualClock();
+    const channel = new FakeChannel(clock, () => clock.wait(100));
+    const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+    expect(outcome.error).toBeInstanceOf(ProbeTimeoutError);
+    expect(outcome.settledAtMs).toBe(WINDOW_MS + DEFAULT_RESULT_GRACE_MS);
+    const error = outcome.error as ProbeTimeoutError;
+    // 送信は 44 ms から 100 ms ごと。30 件目（番号 29）の送信は 2,944 ms に始まり、窓の終わり（3,000 ms）に間に合わない
+    expect(error.stalledMessageIndex).toBe(29);
+    expect(error.sentMessages).toBe(29);
+  });
+
+  describe("打ち切ったあとの送信の解決・拒否は、無視する（結果にも、未処理の拒否にも、ならない）", () => {
+    /** 5 件目で、外から解決・拒否できる Promise を返すチャンネル */
+    function channelWithDeferredFifthSend(clock: ManualClock): { channel: FakeChannel; resolve: () => void; reject: (reason: unknown) => void } {
+      let resolve: () => void = () => undefined;
+      let reject: (reason: unknown) => void = () => undefined;
+      const channel = new FakeChannel(clock, (_bytes, self) =>
+        self.sent.length === 5
+          ? new Promise<void>((resolveSend, rejectSend) => {
+              resolve = resolveSend;
+              reject = rejectSend;
+            })
+          : undefined,
+      );
+      return { channel, resolve: () => resolve(), reject: (reason) => reject(reason) };
+    }
+
+    test("窓の終わり（3,000 ms）のあと、猶予のあいだに、詰まっていた送信が拒否されても、ProbeSendError にしない（8,000 ms に ProbeTimeoutError）", async () => {
+      const clock = new ManualClock();
+      const { channel, reject } = channelWithDeferredFifthSend(clock);
+      clock.at(5000, () => reject(new Error("the socket closed")));
+      const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(outcome.error).toBeInstanceOf(ProbeTimeoutError);
+      expect(outcome.settledAtMs).toBe(8000);
+    });
+
+    test("詰まっていた送信が、猶予のあいだに解決しても、送り続けない（計測の窓は終わっている）。結果が無ければ ProbeTimeoutError", async () => {
+      const clock = new ManualClock();
+      const { channel, resolve } = channelWithDeferredFifthSend(clock);
+      clock.at(5000, resolve);
+      const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(outcome.error).toBeInstanceOf(ProbeTimeoutError);
+      expect(channel.sent).toHaveLength(5);
+    });
+
+    test("結果が届いて終わったあとに、詰まっていた送信が拒否されても、返した値は変わらない", async () => {
+      const clock = new ManualClock();
+      const { channel, reject } = channelWithDeferredFifthSend(clock);
+      clock.at(1000, () => channel.deliver(2222));
+      clock.at(1200, () => reject(new Error("late failure")));
+      const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(outcome.value).toBe(2222);
+      // 拒否のあとも、測定の結果は 1 回だけ。続きの時刻まで進めても、何も起きない
+      await clock.run(clock.wait(500));
+      expect(channel.listeners).toBe(0);
+    });
+  });
+
+  describe("送信の失敗（拒否・例外）の扱い：窓の終わりまでの失敗だけが ProbeSendError", () => {
+    test("送信に 500 ms かかって拒否された：窓の終わりを待たず、その時点で ProbeSendError（何番目か・原因つき）", async () => {
+      const clock = new ManualClock();
+      const failure = new Error("write failed");
+      const channel = new FakeChannel(clock, (_bytes, self) => (self.sent.length === 4 ? clock.wait(500).then(() => Promise.reject(failure)) : undefined));
+      const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(outcome.error).toBeInstanceOf(ProbeSendError);
+      const error = outcome.error as ProbeSendError;
+      expect(error.messageIndex).toBe(3);
+      expect(error.cause).toBe(failure);
+      expect(outcome.settledAtMs).toBeLessThan(WINDOW_MS);
+      expect(channel.listeners).toBe(0);
+    });
+
+    test("送信が同期の例外を投げた：その時点で ProbeSendError。続けて送らない", async () => {
+      const clock = new ManualClock();
+      const channel = new FakeChannel(clock, (_bytes, self) => {
+        if (self.sent.length === 10) {
+          throw new Error("InvalidStateError");
+        }
+        return undefined;
+      });
+      const outcome = await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(outcome.error).toBeInstanceOf(ProbeSendError);
+      expect((outcome.error as ProbeSendError).messageIndex).toBe(9);
+      expect(channel.sent).toHaveLength(10);
+    });
+  });
+
+  describe("待ち（タイマ）は、送信ごとに作らない：窓の終わり 1 本と、猶予の 1 本と、ペースの待ち", () => {
+    test("送信が詰まるとき：待ちは 3 本（最初のペースの待ち・窓の終わり・猶予）で、終わったあとに、タイマは残らない", async () => {
+      const clock = new ManualClock();
+      const channel = new FakeChannel(clock, stuck);
+      await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(clock.waitCalls).toBe(3);
+      expect(clock.pendingTimers).toBe(0);
+    });
+
+    test("68 件を送り切って、結果が来ないとき：待ちは 70 本（ペースの待ち 68・窓の終わり・猶予）。送信ごとに、期限の待ちを足さない", async () => {
+      const clock = new ManualClock();
+      const channel = new FakeChannel(clock);
+      await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(clock.waitCalls).toBe(68 + 2);
+      expect(clock.pendingTimers).toBe(0);
+    });
+
+    test("送信が即座に終わる通常の経路でも、待ちの数は、計画の数 + 2", async () => {
+      const clock = new ManualClock();
+      const channel = new FakeChannel(clock);
+      clock.at(3100, () => channel.deliver(5000));
+      await clock.run(new UplinkProbe().measure(channel, clock));
+      expect(clock.waitCalls).toBe(68 + 2);
+    });
   });
 });
 
