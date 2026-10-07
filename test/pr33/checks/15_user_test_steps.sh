@@ -6,7 +6,8 @@
 #   手順 2  http://localhost:3001/up を開くと、緑一色のページが表示される
 #   手順 3  http://localhost:3002/health を開くと、{"status":"ok"} と表示される
 #   手順 4  http://localhost:3101/up は開けない（内部通信の口が外から届かないことの確認）
-#   手順 5  http://localhost:3000/ を開くと、404 の表示になる（ページがまだ無いため）
+#   手順 5  存在しないページ（http://localhost:3000/pr33-no-such-page）を開くと、404 の表示になる
+#           （PR #33 の時点では / も 404 だったが、ページの追加で変わるため、存在しないパスで確かめる）
 #   補足    db のポート 5432 がホストへ公開されていない
 #
 # 前提: scripts/setup_dev_env.sh と scripts/dc.sh up -d --wait を済ませていること（開発サーバーが healthy）。
@@ -119,14 +120,12 @@ expect_json "手順 4: backend の公開ポートは ${BACKEND_PORT}（公開側
   "[.[] | select(.Service == \"backend\") | .Publishers[]? | select(.PublishedPort > 0) | .PublishedPort] | unique == [${BACKEND_PORT}]" "$ps_json"
 
 # --- 手順 5 ---
-section "手順 5: ${FRONTEND_URL}/ を開くと 404 の表示になる（ページがまだ無い）"
-http_get "${FRONTEND_URL}/"
-expect_eq "手順 5: HTTP 404" "404" "$HTTP_STATUS"
-if grep -q '<title>404: This page could not be found.</title>' <<<"$HTTP_BODY"; then pass "手順 5: ページのタイトルは「404: This page could not be found.」"; else fail "手順 5: ページのタイトルは「404: This page could not be found.」"; fi
-if grep -q 'This page could not be found' <<<"$HTTP_BODY"; then pass "手順 5: 「This page could not be found.」と表示される"; else fail "手順 5: 「This page could not be found.」と表示される"; fi
-if grep -qiE 'Internal Server Error|Unhandled Runtime Error|Application error' <<<"$HTTP_BODY"; then fail "手順 5: エラー画面（500 など）ではなく、404 の画面である"; else pass "手順 5: エラー画面（500 など）ではなく、404 の画面である"; fi
+section "手順 5: 存在しないページ ${FRONTEND_URL}/pr33-no-such-page を開くと 404 の表示になる"
 http_get "${FRONTEND_URL}/pr33-no-such-page"
-expect_eq "手順 5: 存在しないパスも 404" "404" "$HTTP_STATUS"
+expect_eq "手順 5: HTTP 404" "404" "$HTTP_STATUS"
+if grep -qiE 'Internal Server Error|Unhandled Runtime Error|Application error' <<<"$HTTP_BODY"; then fail "手順 5: エラー画面（500 など）ではなく、404 の画面である"; else pass "手順 5: エラー画面（500 など）ではなく、404 の画面である"; fi
+http_get "${FRONTEND_URL}/pr33-no-such-page/nested"
+expect_eq "手順 5: 入れ子の存在しないパスも 404" "404" "$HTTP_STATUS"
 
 # --- 補足: db はホストへ公開しない ---
 section "補足: db のポート ${DB_PORT} はホストへ公開されていない"

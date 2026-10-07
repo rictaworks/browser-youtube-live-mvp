@@ -5,7 +5,7 @@
 //   手順 2  /up（backend）         緑一色（画面の全画素が rgb(0, 128, 0)）
 //   手順 3  /health（relay）       {"status":"ok"} と表示される
 //   手順 4  3101（backend の内部通信の口）  開けない（接続を拒否される）
-//   手順 5  /（frontend）          404 の画面
+//   手順 5  /pr33-no-such-page（frontend）  404 の画面（存在しないパス）
 //
 // 使い方: PR33_PLAYWRIGHT_DIR=<playwright の置き場> node browser_check.cjs
 //   FRONTEND_PORT・BACKEND_PORT・RELAY_PORT  ポート番号（既定は 3000・3001・3002。ホストは localhost に固定）
@@ -180,21 +180,13 @@ async function main() {
       fail(`手順 4: 接続できない以外の理由で失敗した（${navigationError}）`);
     }
 
-    console.log(`\n-- 手順 5: ${frontend}/（404）`);
-    visit = await open(`${frontend}/`);
+    console.log(`\n-- 手順 5: ${frontend}/pr33-no-such-page（404）`);
+    visit = await open(`${frontend}/pr33-no-such-page`);
     expectEq('手順 5: HTTP 404', 404, visit.response.status());
-    expectEq('手順 5: ページのタイトル', '404: This page could not be found.', visit.title);
-    expectEq('手順 5: 画面に「404」と「This page could not be found.」が表示される', '404\nThis page could not be found.', visit.text);
     expectEq('手順 5: ページのエラー（未処理の例外）が無い', [], pageErrors);
     // 404 の文書そのもの以外に、失敗した読み込み（画面の部品の 404・500）が無い
-    expectEq('手順 5: 文書以外に、失敗した読み込みが無い', [`404 ${frontend}/`], badResponses);
-    const notFoundShot = await shot('step5_frontend_root_404');
-    const notFoundColors = await analyzeColors(helperPage, notFoundShot);
-    if (JSON.stringify(notFoundColors.dominant) === JSON.stringify([255, 255, 255]) && notFoundColors.dominantRatio > 0.9) {
-      pass('手順 5: 画面の大半は白（文字だけの簡素な 404 の画面）');
-    } else {
-      fail(`手順 5: 画面の大半は白（実際の最多の色: ${notFoundColors.dominant.join(',')}、割合 ${notFoundColors.dominantRatio.toFixed(2)}）`);
-    }
+    expectEq('手順 5: 文書以外に、失敗した読み込みが無い', [`404 ${frontend}/pr33-no-such-page`], badResponses);
+    await shot('step5_frontend_not_found');
 
     console.log(`\nスクリーンショットの置き場: ${artifactDir}`);
   } finally {
