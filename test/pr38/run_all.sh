@@ -2,15 +2,15 @@
 # PR #38（issue #4「アプリケーション: DB スキーマ（15 テーブル）・制約・モデル・所有権の絞り込み」）のテスト一式。
 # 対象は開発サーバー（scripts/dc.sh 経由の docker compose）。層をまたいで、1 回で実行する。
 #
-#    1. RSpec（spec/models。テスト用 DB を新しく作り、db/structure.sql から読み込む）と、spec/models の RuboCop
-#    2. RuboCop（モデル・マイグレーション・テスト補助・ファクトリ）
+#    1. RSpec（spec/models と spec/config/postgres_error_verbosity_spec.rb。テスト用 DB を新しく作り、db/structure.sql から読み込む）と、その RuboCop
+#    2. RuboCop（モデル・マイグレーション・テスト補助・ファクトリ・エラーメッセージの初期化子）
 #    3. Brakeman・bundler-audit（backend 全体）
 #    4. 走査: 絵文字・削除系コマンドの語・資格情報の形式（成果物すべて。scan_sources.py）
-#    5. 走査: 日本語の文字列リテラル・実時計の参照・ファイルを消す呼び出し（Ruby の字句解析。scan_ruby_sources.rb）
+#    5. 走査: 日本語の文字列リテラル・実時計の参照・ファイルを消す呼び出し（Ruby の字句解析。モデル・マイグレーション・初期化子。scan_ruby_sources.rb）
 #    6. db/structure.sql をファイルとして検査（列・型・NULL 可否・符号と契約の一致・索引・外部キー・版。check_structure_sql.py）
 #    7. マイグレーションの往復（上げる→全部戻す→上げる→もう一度上げる）。できた structure.sql が、コミット済みと一致する
 #    8. structure.sql から読み込んだテスト用 DB を書き出し直しても、同じ structure.sql になる（db:schema:load が再現する）
-#    9. 開発 DB が最新で、書き出したスキーマが、コミット済みの structure.sql と一致する
+#    9. 開発 DB が最新で、書き出したスキーマが、コミット済みの structure.sql と一致する。開発の接続の error verbosity が TERSE
 #   10. 既存の画面（3 層のヘルスチェック）が、影響を受けていない
 #
 # 使い方: このスクリプトを実行する（作業ディレクトリは問わない）。
@@ -121,11 +121,12 @@ run_function() {
 
 # ------------------------------------------------------------------------------------------------
 step_rspec() {
-  TEST_DB_NAME="$FRESH_DB" scripts/test_backend.sh --db spec/models
+  TEST_DB_NAME="$FRESH_DB" scripts/test_backend.sh --db spec/models spec/config/postgres_error_verbosity_spec.rb
 }
 
 step_rubocop() {
-  scripts/dc.sh exec -T backend bin/rubocop app/models db spec/support spec/factories spec/models
+  scripts/dc.sh exec -T backend bin/rubocop app/models db spec/support spec/factories spec/models \
+    config/initializers/postgres_error_verbosity.rb spec/config/postgres_error_verbosity_spec.rb
 }
 
 step_brakeman() {
@@ -210,6 +211,19 @@ step_dev_database() {
   [[ "$(grep -cE '^\s+up\s' "$log")" -ge 16 ]] || { cat "$log"; echo "FAIL 適用済みのマイグレーションが 16 件に満たない"; return 1; }
   echo "ok   開発 DB のマイグレーションは、すべて up"
 
+  # 開発の接続も、error verbosity が TERSE（config/initializers/postgres_error_verbosity.rb）。読み取りだけ
+  # （確認のために DEFAULT へ変え、元の値へ戻す。この実行の中だけの接続）。
+  local terse
+  terse="$(scripts/dc.sh exec -T backend bin/rails runner - <<'RUBY'
+connection = ActiveRecord::Base.connection.raw_connection
+original = connection.set_error_verbosity(PG::PQERRORS_DEFAULT)
+connection.set_error_verbosity(original)
+puts(original == PG::PQERRORS_TERSE ? "terse" : "not-terse")
+RUBY
+)"
+  [[ "$terse" == "terse" ]] || { echo "FAIL 開発の接続の error verbosity が TERSE ではありません（$terse）"; return 1; }
+  echo "ok   開発の接続は、error verbosity が TERSE（例外のメッセージに、行の値が入らない）"
+
   scripts/dc.sh exec -T backend sh -c 'SCHEMA=/tmp/issue4_dev_dump.sql bin/rails db:schema:dump >/dev/null 2>&1; cat /tmp/issue4_dev_dump.sql' > "$TMP_DIR/dev_structure.sql" || return 1
   if diff -u "$STRUCTURE" "$TMP_DIR/dev_structure.sql" > "$TMP_DIR/dev.diff"; then
     echo "ok   開発 DB から書き出したスキーマが、コミット済みの db/structure.sql と一致する"
@@ -250,8 +264,8 @@ scripts/dc.sh up -d --wait db backend > /dev/null 2>&1 || {
 
 printf 'テスト用 DB: %s（RSpec と、書き出し直しの確認）／%s（マイグレーションの往復）\n' "$FRESH_DB" "$ROUNDTRIP_DB"
 
-run_function "1. RSpec（spec/models）と RuboCop（spec/models）" step_rspec
-run_function "2. RuboCop（モデル・マイグレーション・テスト補助・ファクトリ）" step_rubocop
+run_function "1. RSpec（spec/models・エラーメッセージの spec/config）と RuboCop" step_rspec
+run_function "2. RuboCop（モデル・マイグレーション・テスト補助・ファクトリ・初期化子）" step_rubocop
 run_function "3a. Brakeman（backend 全体）" step_brakeman
 run_function "3b. bundler-audit" step_bundler_audit
 run "4. 走査: 絵文字・削除系コマンドの語・資格情報の形式" python3 -I "$HERE/scan_sources.py" "$ROOT_DIR"

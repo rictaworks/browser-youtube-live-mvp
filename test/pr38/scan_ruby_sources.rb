@@ -1,4 +1,5 @@
-# モデル（app/models）とマイグレーション（db/migrate）の Ruby のソースを、字句解析（Ripper）で走査する（読み取りのみ）。
+# モデル（app/models）・マイグレーション（db/migrate）・エラーメッセージの初期化子（config/initializers/postgres_error_verbosity.rb）の
+# Ruby のソースを、字句解析（Ripper）で走査する（読み取りのみ）。
 # コメントは対象外。コードの部分だけを見る。
 #
 # 実行: backend のコンテナの中の Ruby へ、標準入力で渡す（run_all.sh が行う）。
@@ -15,7 +16,8 @@ require "ripper"
 require "pathname"
 
 root = Pathname.new(ARGV.fetch(0, "/app"))
-files = (Dir[root.join("app/models/**/*.rb").to_s] + Dir[root.join("db/migrate/*.rb").to_s]).sort
+files = (Dir[root.join("app/models/**/*.rb").to_s] + Dir[root.join("db/migrate/*.rb").to_s] +
+         Dir[root.join("config/initializers/postgres_error_verbosity.rb").to_s]).sort
 
 JAPANESE = /[\p{Hiragana}\p{Katakana}\p{Han}　-〿＀-￯]/
 IGNORED_TOKEN_TYPES = %i[ on_comment on_sp on_nl on_ignored_nl on_embdoc_beg on_embdoc on_embdoc_end ].freeze
@@ -88,11 +90,11 @@ detection_ok =
   sample_messages.any? { |m| m.start_with?("ファイル") } &&
   scan_tokens(Ripper.lex("# #{japanese_text} Time.now\nx = 1\n")).empty?
 
-puts "走査したファイル #{files.size} 件（モデルとマイグレーション）"
+puts "走査したファイル #{files.size} 件（モデル・マイグレーション・エラーメッセージの初期化子）"
 puts "検出の仕組みの確認: #{detection_ok ? 'ok' : 'FAIL'}"
 
 problems = []
-problems << "走査したファイルが少なすぎる（#{files.size} 件。モデル 17 ファイルとマイグレーション 16 ファイルが対象）" if files.size < 33
+problems << "走査したファイルが少なすぎる（#{files.size} 件。モデル 17 ファイル・マイグレーション 16 ファイル・初期化子 1 ファイルが対象）" if files.size < 34
 problems << "検出の仕組みが働かない（走査器の不具合）" unless detection_ok
 problems.concat(found)
 

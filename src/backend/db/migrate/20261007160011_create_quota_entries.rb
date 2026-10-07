@@ -1,6 +1,7 @@
 # 割り当ての記帳の明細（requirements.md 8.4・20.1・21 章）。システム全体の表。
 # broadcast_id は、配信に属さない呼び出し（共通枠）と、アカウント削除後は空（7.4）。
-# 列名 method は、ER 図のとおり（ActiveRecord では、属性のリーダーが生成されない。QuotaEntry#api_method を参照）。
+# 列名 method は、ER 図のとおり。Object#method と同じ名前のため、ActiveRecord が生成する属性のリーダーが Object#method を隠す。
+# QuotaEntry#method が、引数なしなら列の値を返し、引数ありなら Object#method（リフレクション）として働く（app/models/quota_entry.rb）。
 class CreateQuotaEntries < ActiveRecord::Migration[8.1]
   BUCKETS = %w[ prep settle common ].freeze # 準備・確認枠 / 終了・清算枠 / 共通枠
   RESULTS = %w[ ok error ].freeze

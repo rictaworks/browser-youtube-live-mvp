@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""この PR の成果物（モデル・マイグレーション・スペック・ファクトリ・structure.sql・このディレクトリ）を走査する（読み取りのみ）。
+"""この PR の成果物（モデル・マイグレーション・初期化子・スペック・ファクトリ・structure.sql・このディレクトリ）を走査する（読み取りのみ）。
 
 使い方: python3 -I scan_sources.py <リポジトリのルート>
 終了コード: 0 = 問題なし / 1 = 問題あり
@@ -27,6 +27,8 @@ PATTERNS = [
     "src/backend/app/models/**/*.rb",
     "src/backend/db/migrate/*.rb",
     "src/backend/db/structure.sql",
+    "src/backend/config/initializers/postgres_error_verbosity.rb",
+    "src/backend/spec/config/postgres_error_verbosity_spec.rb",
     "src/backend/spec/models/**/*.rb",
     "src/backend/spec/factories/*.rb",
     "src/backend/spec/support/account_records.rb",
