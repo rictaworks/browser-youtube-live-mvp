@@ -26,8 +26,15 @@
 #                1. コメントの行（行頭の空白のあとが #）: 実行されない。禁止を説明する文章は、コメントに書く。
 #                2. scripts/dc.sh の、拒否する語の一覧（readonly DENIED_* の配列と、case の見出し行）: dc.sh は削除系の操作を
 #                   拒否する側で、拒否の対象の語をデータとして書く。実行されない。ほかのファイル・ほかの行には適用しない。
-#                3. test/ 全体: テストは、拒否・走査の動作を確かめるため、削除系の語を入力のデータとして扱う。
-#                   scripts/tests/ は test/ の外にあり、語を分割して書く規約（例: d${E}own）に沿っているため、検査の対象。
+#                3. 許可リスト（ファイル単位。パスの完全一致。理由つき）: 下の deletion の allowed_files に書く。実行のたびに、
+#                   ログへ出す。いまは、次の 2 つだけ。ここに無いファイルは、test/ の中でも検査する。
+#                     test/pr33/lib/common.sh         削除系の語を分割して組み立てるための、語の部品の定義（W_*）。
+#                                                     分割した断片（rm と dir など）が、語として並ぶ。
+#                     test/pr33/lib/deletion_scan.sh  テスト用の走査器。走査する語（rmi・Rails のタスク名など）を、
+#                                                     パターンの定義として持つ。
+#                   テストは、拒否・走査の動作を確かめるため、削除系の語を入力のデータとして扱う。ただし、テストのソースは、
+#                   語を分割して組み立てる（例: test/pr33/lib/common.sh の W_*、test/pr34/check_ci.py の W）。そのため、
+#                   許可リスト以外の test/ のファイル（test/pr34/ を含む）も、検査の対象。scripts/tests/ も同じ。
 #              このワークフロー自身も対象。検査の語は、各語の 1 文字を [] で囲んで書く（r[m] は rm に一致する）ため、
 #              自分自身を除外せずに済む。
 #   emoji      src/ の追跡されたテキストファイルに、絵文字が無いこと（アイコンは FontAwesome。CLAUDE.md）。
@@ -301,6 +308,10 @@ jobs:
           import sys
 
 
+          def escape_data(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
           def tracked_entries():
               """追跡しているファイルの (モード, パス) のリスト"""
               output = subprocess.run(["git", "ls-files", "-s", "-z"], check=True, capture_output=True).stdout
@@ -313,9 +324,7 @@ jobs:
 
 
           def is_target(mode, path):
-              # test/ は対象外（冒頭の「除外の根拠」の 3）
-              if path.startswith("test/"):
-                  return False
+              # 検査の対象: ワークフロー・scripts/・Dockerfile・compose のファイル・シェルスクリプト・実行権限つきのファイル（test/ の中も含む）
               name = path.rsplit("/", 1)[-1]
               return (
                   path.startswith(".github/")
@@ -325,6 +334,14 @@ jobs:
                   or re.fullmatch(r"(docker-)?compose(\..+)?\.ya?ml", name) is not None
                   or mode == "100755"
               )
+
+
+          def allowed_files():
+              """検査しないファイルの {パス: 理由}（許可リスト）。パスの完全一致。冒頭の「除外の根拠」の 3。ここに無いファイルは、test/ の中でも検査する"""
+              return {
+                  "test/pr33/lib/common.sh": "削除系の語を分割して組み立てるための、語の部品の定義（W_*）。分割した断片が、語として並ぶ",
+                  "test/pr33/lib/deletion_scan.sh": "テスト用の走査器。走査する語（docker のサブコマンド・Rails のタスク名）を、パターンの定義として持つ",
+              }
 
 
           def rules():
@@ -402,11 +419,16 @@ jobs:
 
           def main():
               compiled = [(label, [re.compile(pattern) for pattern in patterns]) for label, patterns in rules()]
+              allowed = allowed_files()
               targets = [path for mode, path in tracked_entries() if is_target(mode, path)]
               violations = 0
               excluded_total = {}
+              skipped_files = []
               checked = 0
               for path in targets:
+                  if path in allowed:
+                      skipped_files.append(path)
+                      continue
                   if os.path.islink(path) or not os.path.isfile(path):
                       continue
                   checked += 1
@@ -415,8 +437,12 @@ jobs:
                       excluded_total[reason] = excluded_total.get(reason, 0) + count
                   for number, label, text in hits:
                       violations += 1
-                      print(f"::error::削除系のコマンドです（{label}）: {path}:{number}")
+                      print(f"::error::削除系のコマンドです（{label}）: {escape_data(path)}:{number}")
                       print(f"  {path}:{number}: {text}")
+              if skipped_files:
+                  print(f"検査しなかったファイル（許可リスト）: {len(skipped_files)} 件")
+                  for path in skipped_files:
+                      print(f"  {path}: {allowed[path]}")
               summary = "、".join(f"{reason} {count} 行" for reason, count in sorted(excluded_total.items())) or "なし"
               print(f"検査したファイル {checked} 件。検査しなかった行: {summary}。")
               if violations:
@@ -440,6 +466,10 @@ jobs:
           import subprocess
           import sys
           import unicodedata
+
+
+          def escape_data(text):
+              return text.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
 
 
           def excluded_directories():
@@ -499,14 +529,14 @@ jobs:
                       text = data.decode("utf-8")
                   except UnicodeDecodeError as error:
                       violations += 1
-                      print(f"::error::UTF-8 として読めないため、絵文字の有無を判定できません: {path}（{error}）")
+                      print(f"::error::UTF-8 として読めないため、絵文字の有無を判定できません: {escape_data(path)}（{error}）")
                       continue
                   for number, column, char in find_emoji(text, pattern):
                       violations += 1
                       if printed < 100:
                           printed += 1
                           name = unicodedata.name(char, "名前なし")
-                          print(f"::error::絵文字があります: {path}:{number}:{column} U+{ord(char):04X} {name}")
+                          print(f"::error::絵文字があります: {escape_data(path)}:{number}:{column} U+{ord(char):04X} {name}")
               print(f"検査したファイル {len(files)} 件（node_modules・vendor・.cache・.next とバイナリを除く）。")
               if violations:
                   print(f"違反 {violations} 件。絵文字は使いません。アイコンは FontAwesome を使ってください（CLAUDE.md）。")

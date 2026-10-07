@@ -4,6 +4,9 @@
   python3 -I mutate_ci.py <リポジトリのルート> <作業ディレクトリ>
 
 壊した ci.yml は <作業ディレクトリ>/mutants/ に置く（元の ci.yml は変更しない。ファイルは削除しない）。
+check_ci.py が FAIL の行を出さずに異常終了した場合（例外など）は、検出とみなさず、見逃しとして数える（原因を確かめるため）。
+
+このソースには、削除系コマンドの語を書かない（CLAUDE.md。CI の hygiene が、このファイル自身を検査する）。
 """
 
 import os
@@ -58,12 +61,21 @@ def mutations():
         "node_modules の除外を外す": lambda t: replace_first(t, '{"node_modules", "vendor", ".cache", ".next"}', '{"vendor", ".cache", ".next"}'),
         "削除系の語の規則を 1 つ外す（一括削除）": lambda t: re.sub(r'\n\s*\("不要な資源の一括削除".*\n', "\n", t, count=1),
         "削除系: 実行権限のファイルを対象から外す": lambda t: replace_first(t, '                  or mode == "100755"\n', ""),
-        "削除系: test/ を対象に入れる": lambda t: replace_first(t, '              if path.startswith("test/"):\n                  return False\n', ""),
+        "削除系: test/ 全体を、検査から外す（許可リストの前の方式に戻す）": lambda t: replace_first(t, '              name = path.rsplit("/", 1)[-1]\n              return (\n', '              if path.startswith("test/"):\n                  return False\n              name = path.rsplit("/", 1)[-1]\n              return (\n'),
+        "削除系: 許可リストを、test/ 全体への前方一致にする": lambda t: replace_first(t, "                  if path in allowed:\n", '                  if path.startswith("test/"):\n'),
+        "削除系: 許可リストを使わない（許可したファイルも検査する）": lambda t: replace_first(t, "                  if path in allowed:\n", "                  if False:\n"),
+        "削除系: 許可リストへ test/pr34 のファイルを足す": lambda t: replace_first(t, '                  "test/pr33/lib/deletion_scan.sh":', '                  "test/pr34/check_x.sh": "x",\n                  "test/pr33/lib/deletion_scan.sh":'),
+        "削除系: 許可リストから common.sh を外す": lambda t: re.sub(r'\n\s*"test/pr33/lib/common.sh": .*\n', "\n", t, count=1),
+        "削除系: 許可したファイルを、ログに出さない": lambda t: replace_first(t, "              if skipped_files:\n", "              if False:\n"),
         "削除系: dc.sh の除外を、すべてのファイルへ広げる": lambda t: replace_first(t, 'if path == "scripts/dc.sh":', "if True:"),
         "削除系: コメントの行を除外しない": lambda t: replace_first(t, 'if re.match(r"\\s*#", line):', "if False:"),
+        "削除系: ::error:: のパスをエスケープしない": lambda t: replace_first(t, "）: {escape_data(path)}:{number}", "）: {path}:{number}"),
+        "絵文字: ::error:: のパスをエスケープしない": lambda t: replace_first(t, "絵文字があります: {escape_data(path)}", "絵文字があります: {path}"),
+        "絵文字: UTF-8 のエラーのパスをエスケープしない": lambda t: replace_first(t, "判定できません: {escape_data(path)}", "判定できません: {path}"),
         "機密: *.pem を許す": lambda t: replace_first(t, 'name.endswith((".pem", ".key"))', 'name.endswith((".key",))'),
         "機密: .env.example 以外の .env.* も許す": lambda t: replace_first(t, 'name.startswith(".env.") or ', ""),
         "機密: 大文字小文字を区別する": lambda t: replace_first(t, 'name = path.rsplit("/", 1)[-1].lower()', 'name = path.rsplit("/", 1)[-1]'),
+        "機密: ::error:: のパスをエスケープしない": lambda t: replace_first(t, "追跡されています: {escape_data(path)}", "追跡されています: {path}"),
         "go.mod の版を使わない": lambda t: replace_first(t, "go-version-file: src/relay/go.mod", "go-version: '1.26'"),
         "bundler-cache を外す": lambda t: replace_first(t, "          bundler-cache: true\n", ""),
         "typecheck を外す（npm run typecheck）": lambda t: replace_first(t, "npm run typecheck", "echo skip"),
@@ -90,11 +102,13 @@ def main():
             env=env, capture_output=True, text=True, timeout=300,
         )
         fails = [line for line in result.stdout.splitlines() if line.startswith("FAIL")]
-        status = "検出" if fails else "見逃し"
-        print(f"{status}  m{index:02d} {name}  ({len(fails)} 件失敗" + (": " + fails[0][:90] + ")" if fails else ")"))
-        if not fails:
-            survivors.append(name)
-    print(f"\n変異 {len(mutations())} 件のうち、見逃し {len(survivors)} 件" + (": " + ", ".join(survivors) if survivors else ""))
+        if fails:
+            print(f"検出  m{index:02d} {name}  ({len(fails)} 件失敗: {fails[0][:90]})")
+            continue
+        status = "異常終了（FAIL の行なし。要確認）" if result.returncode != 0 else "見逃し"
+        print(f"{status}  m{index:02d} {name}  (終了コード {result.returncode}。標準エラーの末尾: {result.stderr.strip()[-200:]})")
+        survivors.append(name)
+    print(f"\n変異 {len(mutations())} 件のうち、見逃し・異常終了 {len(survivors)} 件" + (": " + ", ".join(survivors) if survivors else ""))
     return 1 if survivors else 0
 
 

@@ -5,7 +5,12 @@
 
   1. 構造の検査: 受け入れ条件（トリガー・permissions・アクションの版・timeout・concurrency・各 job の手順の順序 ほか）
   2. hygiene の動作の検査: ci.yml の hygiene の各ステップの run を取り出し、一時の git リポジトリ（作業ディレクトリの下）で実行して、
-     違反なら失敗・問題なければ成功になること（陽性・陰性の両方）。実際のリポジトリ（git archive HEAD + ci.yml）でも成功すること
+     違反なら失敗・問題なければ成功になること（陽性・陰性の両方）。許可リスト（ファイル単位）の動作を含む。
+     実際のリポジトリ（git archive HEAD に、ci.yml と、このディレクトリの作業ツリーの版を重ねたもの）でも成功すること
+
+このソースには、削除系コマンドの語を、そのまま書かない（CLAUDE.md。test/pr33/lib/common.sh の W_* と同じ方式）。
+テストデータは、クラス W の部品から組み立てる。CI の hygiene が、このファイル自身を検査するため（許可リストに頼らない）。
+同じ理由で、絵文字の範囲の確認に使う文字は、\\uXXXX の形か、コードポイントの表記で書く。
 
 git の読み取り（git archive）と、作業ディレクトリ内の一時リポジトリでの git init・git add だけを使う。
 実際のリポジトリの git の状態は変えない。ファイルは削除しない（一時リポジトリは、ケースごとに新しい名前で作る）。
@@ -25,9 +30,34 @@ REPO = os.path.abspath(sys.argv[1])
 # 同じ作業ディレクトリで何度実行しても衝突しないよう、実行ごとに新しい名前の下位ディレクトリを使う（ファイルは削除しない）
 WORK = os.path.join(os.path.abspath(sys.argv[2]), time.strftime("run_%Y%m%d_%H%M%S") + f"_{os.getpid()}")
 WORKFLOW_PATH = os.environ.get("CI_YML") or os.path.join(REPO, ".github", "workflows", "ci.yml")  # CI_YML: 変異テスト用に、別のファイルを検査する
+HERE = os.path.dirname(os.path.abspath(__file__))
 
 RESULTS = {"ok": 0, "fail": 0}
 COUNTER = itertools.count(1)
+
+
+class W:
+    """削除系コマンドの語の部品。語は、隣り合う文字列を連結して作る（ソースの上では、語が連続しない）。
+
+    使い方: f"{W.RM} -rf build"。test/pr33/lib/common.sh の W_*（W_RM="r""m" など）と同じ方式。
+    ここの定数名は、大文字（小文字の語として検査に掛からないようにするため）。
+    """
+
+    RM = "r" "m"
+    RMDIR = "r" "mdir"
+    RMI = "r" "mi"
+    UNLINK = "un" "link"
+    SHRED = "sh" "red"
+    DELETE = "de" "lete"
+    CLEAN = "cl" "ean"
+    DOWN = "do" "wn"
+    PRUNE = "pr" "une"
+    CLEAR = "cl" "ear"
+    REMOVE = "re" "move"
+    REMOVE_CAMEL = "Re" "move"
+    RIMRAF = "rim" "raf"
+    CLOBBER = "clo" "bber"
+    RMTREE = "r" "mtree"
 
 
 def report(ok, label, detail=""):
@@ -262,7 +292,7 @@ def run_step(workflow, step_id, cwd):
     return subprocess.run(["bash", "--noprofile", "--norc", "-eo", "pipefail", script_path], cwd=cwd, env=env, capture_output=True, text=True, timeout=300)
 
 
-def expect(workflow, step_id, label, files, should_pass, must_contain=()):
+def expect(workflow, step_id, label, files, should_pass, must_contain=(), must_not_contain=()):
     repo = make_repo(files)
     result = run_step(workflow, step_id, repo)
     output = result.stdout + result.stderr
@@ -272,104 +302,140 @@ def expect(workflow, step_id, label, files, should_pass, must_contain=()):
         if needle not in output:
             passed = False
             detail += f" / 出力に「{needle}」が無い"
+    for needle in must_not_contain:
+        if needle in output:
+            passed = False
+            detail += f" / 出力に「{needle}」がある"
     report(passed, f"{step_id}: {label}", detail)
 
 
-def hygiene_checks(workflow):
-    # ---- secrets ----
+def secrets_checks(workflow):
     ok = {"README.md": "x\n"}
     expect(workflow, "secrets", "機密が無ければ成功（.env.example は許可）", {**ok, ".env.example": "KEY=\n", "src/a/.env.example": "K=\n", "docs/env.md": "x\n", ".envrc": "x\n", "config/credentials.yml.enc": "x\n"}, True)
     for path in [".env", "src/backend/.env", ".env.local", ".env.production", "src/frontend/.env.development.local", "config/master.key", "src/backend/config/master.key", "src/backend/config/credentials/production.key", "certs/server.pem", "a/b/server.PEM", "keys/deploy.key", "鍵/秘密 の 鍵.pem", "src/backend/master.key"]:
         expect(workflow, "secrets", f"追跡されていたら失敗: {path}", {**ok, path: "x\n"}, False, must_contain=[path])
+    # ::error:: の行に出すパスは、% を %25 へ書き換える（ワークフローコマンドの値として安全にするため）
+    expect(workflow, "secrets", "::error:: に出すパスは % を書き換える（keys/a%b.pem）", {**ok, "keys/a%b.pem": "x\n"}, False, must_contain=["::error::", "keys/a%25b.pem"])
 
-    # ---- deletion ----
+
+def deletion_checks(workflow):
     clean_scripts = {"scripts/ok.sh": "#!/usr/bin/env bash\necho hello\nmkdir -p tmp/x\nmv a b\ncp a b\n"}
-    expect(workflow, "deletion", "削除系が無ければ成功（form・norm・firm・perform・rm.md・pr-une など語の一部は許す）", {**clean_scripts, "scripts/words.sh": "#!/usr/bin/env bash\necho form norm firm perform firmware confirm\nls rm.md rm_foo rm-foo\nnpm run format\n"}, True)
+    expect(
+        workflow, "deletion", "削除系が無ければ成功（別の語の一部・ファイル名の一部は許す）",
+        {**clean_scripts, "scripts/words.sh": f"#!/usr/bin/env bash\necho form norm firm perform firmware confirm\nls {W.RM}.md {W.RM}_foo {W.RM}-foo\nnpm run format\n"}, True,
+    )
+    # 違反の例。語は、W の部品から組み立てる（このソースに、語をそのまま書かない）。ブランチの削除のオプションは、文字列を分けて書く
     violations = {
-        "rm -rf（スクリプト）": ("scripts/x.sh", "#!/usr/bin/env bash\nrm -rf build\n"),
-        "rm（行頭に空白）": ("scripts/x.sh", "#!/usr/bin/env bash\n  rm file\n"),
-        "rm（&& の後ろ）": ("scripts/x.sh", "cd x && rm file\n"),
-        "rm（絶対パス）": ("scripts/x.sh", "/bin/rm file\n"),
-        "rm（引用符の中・配列）": ("scripts/x.sh", "args=(\"rm\" \"-f\")\n"),
-        "rm（ワークフローの run）": (".github/workflows/x.yml", "jobs:\n  a:\n    steps:\n      - run: rm -rf build\n"),
-        "rm（Dockerfile）": ("src/relay/Dockerfile", "FROM scratch\nRUN rm -rf /var/lib/apt/lists/*\n"),
-        "rm（Dockerfile.dev）": ("docker/Dockerfile.dev", "FROM scratch\nRUN rm -f x\n"),
-        "rm（compose）": ("docker-compose.yml", "services:\n  a:\n    command: sh -c 'rm -f x'\n"),
-        "rmdir": ("scripts/x.sh", "rmdir x\n"),
-        "unlink": ("scripts/x.sh", "unlink x\n"),
-        "shred": ("scripts/x.sh", "shred x\n"),
-        "find -delete": ("scripts/x.sh", "find . -name '*.tmp' -delete\n"),
-        "git clean": ("scripts/x.sh", "git clean -fdx\n"),
-        "git branch -D": ("scripts/x.sh", "git branch -D foo\n"),
-        "git worktree remove": ("scripts/x.sh", "git worktree remove ../x\n"),
-        "git rm": ("scripts/x.sh", "git rm file\n"),
-        "docker rm": ("scripts/x.sh", "docker rm foo\n"),
-        "docker rmi": ("scripts/x.sh", "docker rmi foo\n"),
-        "docker volume rm": ("scripts/x.sh", "docker volume rm foo\n"),
-        "docker compose down": ("scripts/x.sh", "docker compose down\n"),
-        "docker compose -f x.yml down -v": ("scripts/x.sh", "docker compose -f x.yml down -v\n"),
-        "docker-compose down": ("scripts/x.sh", "docker-compose down\n"),
-        "docker system prune": ("scripts/x.sh", "docker system prune -af\n"),
-        "prune（npm）": ("scripts/x.sh", "npm prune\n"),
-        "docker run --rm": ("scripts/x.sh", "docker run --rm img\n"),
-        "rsync --delete": ("scripts/x.sh", "rsync -a --delete a b\n"),
-        "--delete-after": ("scripts/x.sh", "rsync -a --delete-after a b\n"),
-        "FileUtils.rm_rf": ("scripts/x.rb", "FileUtils.rm_rf('x')\n"),
-        "File.delete": ("scripts/x.rb", "File.delete('x')\n"),
-        "Dir.rmdir": ("scripts/x.rb", "Dir.rmdir('x')\n"),
-        "fs.rmSync": ("scripts/x.js", "fs.rmSync('x')\n"),
-        "fs.unlinkSync": ("scripts/x.js", "fs.unlinkSync('x')\n"),
-        "os.RemoveAll": ("scripts/x.go", "os.RemoveAll(\"x\")\n"),
-        "shutil.rmtree": ("scripts/x.py", "shutil.rmtree('x')\n"),
-        "os.remove": ("scripts/x.py", "os.remove('x')\n"),
-        "log:clear": ("scripts/x.sh", "bin/rails log:clear\n"),
-        "tmp:clear": ("scripts/x.sh", "bin/rails tmp:clear\n"),
-        "rimraf": ("scripts/x.sh", "npx rimraf dist\n"),
-        "実行権限つきのファイル（拡張子なし）": ("src/backend/bin/setup", ("#!/usr/bin/env ruby\nsystem('rm -rf tmp')\n", True)),
-        "拡張子 .sh（scripts の外）": ("tools/x.sh", "rm -rf x\n"),
-        "行末のコメントは除外しない": ("scripts/x.sh", "rm -rf x # comment\n"),
+        f"{W.RM} -rf（スクリプト）": ("scripts/x.sh", f"#!/usr/bin/env bash\n{W.RM} -rf build\n"),
+        f"{W.RM}（行頭に空白）": ("scripts/x.sh", f"#!/usr/bin/env bash\n  {W.RM} file\n"),
+        f"{W.RM}（&& の後ろ）": ("scripts/x.sh", f"cd x && {W.RM} file\n"),
+        f"{W.RM}（絶対パス）": ("scripts/x.sh", f"/bin/{W.RM} file\n"),
+        f"{W.RM}（引用符の中・配列）": ("scripts/x.sh", f'args=("{W.RM}" "-f")\n'),
+        f"{W.RM}（ワークフローの run）": (".github/workflows/x.yml", f"jobs:\n  a:\n    steps:\n      - run: {W.RM} -rf build\n"),
+        f"{W.RM}（Dockerfile）": ("src/relay/Dockerfile", f"FROM scratch\nRUN {W.RM} -rf /var/lib/apt/lists/*\n"),
+        f"{W.RM}（Dockerfile.dev）": ("docker/Dockerfile.dev", f"FROM scratch\nRUN {W.RM} -f x\n"),
+        f"{W.RM}（compose）": ("docker-compose.yml", f"services:\n  a:\n    command: sh -c '{W.RM} -f x'\n"),
+        W.RMDIR: ("scripts/x.sh", f"{W.RMDIR} x\n"),
+        W.UNLINK: ("scripts/x.sh", f"{W.UNLINK} x\n"),
+        W.SHRED: ("scripts/x.sh", f"{W.SHRED} x\n"),
+        f"find -{W.DELETE}": ("scripts/x.sh", f"find . -name '*.tmp' -{W.DELETE}\n"),
+        f"git {W.CLEAN}": ("scripts/x.sh", f"git {W.CLEAN} -fdx\n"),
+        "git branch の削除（大文字）": ("scripts/x.sh", "git branch -" "D foo\n"),
+        f"git worktree {W.REMOVE}": ("scripts/x.sh", f"git worktree {W.REMOVE} ../x\n"),
+        f"git {W.RM}": ("scripts/x.sh", f"git {W.RM} file\n"),
+        f"docker {W.RM}": ("scripts/x.sh", f"docker {W.RM} foo\n"),
+        f"docker {W.RMI}": ("scripts/x.sh", f"docker {W.RMI} foo\n"),
+        f"docker volume {W.RM}": ("scripts/x.sh", f"docker volume {W.RM} foo\n"),
+        f"docker compose {W.DOWN}": ("scripts/x.sh", f"docker compose {W.DOWN}\n"),
+        f"docker compose -f x.yml {W.DOWN} -v": ("scripts/x.sh", f"docker compose -f x.yml {W.DOWN} -v\n"),
+        f"docker-compose {W.DOWN}": ("scripts/x.sh", f"docker-compose {W.DOWN}\n"),
+        f"docker system {W.PRUNE}": ("scripts/x.sh", f"docker system {W.PRUNE} -af\n"),
+        f"{W.PRUNE}（npm）": ("scripts/x.sh", f"npm {W.PRUNE}\n"),
+        f"docker run --{W.RM}": ("scripts/x.sh", f"docker run --{W.RM} img\n"),
+        f"rsync --{W.DELETE}": ("scripts/x.sh", f"rsync -a --{W.DELETE} a b\n"),
+        f"--{W.DELETE}-after": ("scripts/x.sh", f"rsync -a --{W.DELETE}-after a b\n"),
+        f"FileUtils.{W.RM}_rf": ("scripts/x.rb", f"FileUtils.{W.RM}_rf('x')\n"),
+        f"File.{W.DELETE}": ("scripts/x.rb", f"File.{W.DELETE}('x')\n"),
+        f"Dir.{W.RMDIR}": ("scripts/x.rb", f"Dir.{W.RMDIR}('x')\n"),
+        f"fs.{W.RM}Sync": ("scripts/x.js", f"fs.{W.RM}Sync('x')\n"),
+        f"fs.{W.UNLINK}Sync": ("scripts/x.js", f"fs.{W.UNLINK}Sync('x')\n"),
+        f"os.{W.REMOVE_CAMEL}All": ("scripts/x.go", f'os.{W.REMOVE_CAMEL}All("x")\n'),
+        f"shutil.{W.RMTREE}": ("scripts/x.py", f"shutil.{W.RMTREE}('x')\n"),
+        f"os.{W.REMOVE}": ("scripts/x.py", f"os.{W.REMOVE}('x')\n"),
+        f"log:{W.CLEAR}": ("scripts/x.sh", f"bin/rails log:{W.CLEAR}\n"),
+        f"tmp:{W.CLEAR}": ("scripts/x.sh", f"bin/rails tmp:{W.CLEAR}\n"),
+        W.RIMRAF: ("scripts/x.sh", f"npx {W.RIMRAF} dist\n"),
+        "実行権限つきのファイル（拡張子なし）": ("src/backend/bin/setup", (f"#!/usr/bin/env ruby\nsystem('{W.RM} -rf tmp')\n", True)),
+        "拡張子 .sh（scripts の外）": ("tools/x.sh", f"{W.RM} -rf x\n"),
+        "行末のコメントは除外しない": ("scripts/x.sh", f"{W.RM} -rf x # comment\n"),
     }
     for label, (path, content) in violations.items():
         expect(workflow, "deletion", f"違反なら失敗: {label}", {**clean_scripts, path: content}, False, must_contain=[path])
+    # ::error:: の行に出すパスは、% を %25 へ書き換える
+    expect(workflow, "deletion", "::error:: に出すパスは % を書き換える（scripts/a%b.sh）", {"scripts/a%b.sh": f"{W.RM} -rf x\n"}, False, must_contain=["::error::", "scripts/a%25b.sh:1"])
+
     # 検査の対象外（根拠: 実行されない・対象のファイルではない）
     exempt = {
-        "コメントの行": ("scripts/c.sh", "#!/usr/bin/env bash\n# rm -rf x は使わない。find -delete も git clean も docker compose down も prune も使わない\necho ok\n"),
-        "文書（.md）に書いた説明": ("docs/guide.md", "rm -rf は使わない\n```\nrm -rf x\n```\n"),
-        "実行権限のない src のコード": ("src/backend/app/x.rb", "FileUtils.rm_rf('x')\n"),
-        "test/ のシェル（テストは拒否の確認のために語を入力に使う）": ("test/pr1/checks/a.sh", ("#!/usr/bin/env bash\nrm -rf x\n", True)),
-        "YAML のコメント": (".github/workflows/c.yml", "# docker compose down\non: push\n"),
+        "コメントの行": ("scripts/c.sh", f"#!/usr/bin/env bash\n# {W.RM} -rf x は使わない。find -{W.DELETE} も git {W.CLEAN} も docker compose {W.DOWN} も {W.PRUNE} も使わない\necho ok\n"),
+        "文書（.md）に書いた説明": ("docs/guide.md", f"{W.RM} -rf は使わない\n```\n{W.RM} -rf x\n```\n"),
+        "実行権限のない src のコード": ("src/backend/app/x.rb", f"FileUtils.{W.RM}_rf('x')\n"),
+        "YAML のコメント": (".github/workflows/c.yml", f"# docker compose {W.DOWN}\non: push\n"),
     }
     for label, (path, content) in exempt.items():
         expect(workflow, "deletion", f"検査の対象外: {label}", {**clean_scripts, path: content}, True)
+
+    # 許可リスト（ファイル単位。パスの完全一致）。ci.yml の allowed_files の 2 つだけを、検査しない。ほかは、test/ の中でも検査する
+    flagged = f"#!/usr/bin/env bash\n{W.RM} -rf x\n"
+    for path in ["test/pr33/lib/common.sh", "test/pr33/lib/deletion_scan.sh"]:
+        expect(workflow, "deletion", f"許可リストのファイルは検査しない（ログに出す）: {path}", {**clean_scripts, path: (flagged, True)}, True, must_contain=["許可リスト", path])
+    not_allowed = {
+        "test/ の、許可リストにないファイル（実行権限つき）": "test/pr99/checks/a.sh",
+        "test/ の、許可リストにないファイル（拡張子 .sh）": "test/pr99/lib/other.sh",
+        "許可リストと同じディレクトリの、別のファイル": "test/pr33/lib/other.sh",
+        "許可リストのファイル名と同じ、別のディレクトリのファイル": "test/pr99/lib/common.sh",
+        "許可リストのファイル名と同じ、scripts の下のファイル": "scripts/lib/deletion_scan.sh",
+        "test/pr34 のファイル": "test/pr34/check_x.sh",
+    }
+    for label, path in not_allowed.items():
+        expect(workflow, "deletion", f"許可リストに無いファイルは検査する: {label}", {**clean_scripts, path: (flagged, True)}, False, must_contain=[path], must_not_contain=["検査しなかったファイル（許可リスト）"])
+    expect(workflow, "deletion", "許可リストのファイルが無くても成功する（許可リストの表示も無い）", {**clean_scripts}, True, must_not_contain=["許可リスト"])
 
     # scripts/dc.sh の拒否の一覧だけを除外する（ほかのファイル・ほかの行は除外しない）
     denylist = (
         "#!/usr/bin/env bash\n"
         "readonly DENIED_TOKENS=(\n"
-        "  down rm kill prune\n"
-        "  --rm --remove-orphans\n"
+        f"  {W.DOWN} {W.RM} kill {W.PRUNE}\n"
+        f"  --{W.RM} --{W.REMOVE}-orphans\n"
         ")\n"
         "readonly DENIED_PATTERNS=(\n"
         "  # comment\n"
-        "  '(^|[^[:alnum:]_.-])(rm|rmdir|unlink|shred)([^[:alnum:]_./-]|$)'\n"
-        "  '(^|[[:space:]])-delete([[:space:]]|$)'\n"
-        "  'git[[:space:]]+clean'\n"
+        f"  '(^|[^[:alnum:]_.-])({W.RM}|{W.RMDIR}|{W.UNLINK}|{W.SHRED})([^[:alnum:]_./-]|$)'\n"
+        f"  '(^|[[:space:]])-{W.DELETE}([[:space:]]|$)'\n"
+        f"  'git[[:space:]]+{W.CLEAN}'\n"
         ")\n"
         "check() {\n"
-        "  case \"$1\" in\n"
-        "    --rm=* | --volumes=*)\n"
+        '  case "$1" in\n'
+        f"    --{W.RM}=* | --volumes=*)\n"
         "      echo deny\n"
         "      ;;\n"
         "  esac\n"
         "}\n"
     )
     expect(workflow, "deletion", "scripts/dc.sh の拒否の一覧（DENIED_* の配列と case の見出し）は除外する", {"scripts/dc.sh": denylist}, True)
-    expect(workflow, "deletion", "scripts/dc.sh でも、拒否の一覧の外の削除系コマンドは失敗", {"scripts/dc.sh": denylist + "rm -rf tmp\n"}, False, must_contain=["scripts/dc.sh"])
+    expect(workflow, "deletion", "scripts/dc.sh でも、拒否の一覧の外の削除系コマンドは失敗", {"scripts/dc.sh": denylist + f"{W.RM} -rf tmp\n"}, False, must_contain=["scripts/dc.sh"])
     expect(workflow, "deletion", "scripts/dc.sh でも、配列の外の拒否の語（配列を閉じた後）は失敗", {"scripts/dc.sh": denylist.replace("readonly DENIED_TOKENS=(\n", "x=(\n")}, False, must_contain=["scripts/dc.sh"])
     expect(workflow, "deletion", "ほかのファイルの同じ配列は除外しない", {"scripts/other.sh": denylist}, False, must_contain=["scripts/other.sh"])
 
-    # ---- emoji ----
-    expect(workflow, "emoji", "絵文字が無ければ成功（日本語・記号・矢印・著作権表示など）", {"src/ja.ts": "// 日本語のコメント。※ 〜 ～ → ← ↔ ↑ ↓ ★ ☆ ♪ ♭ ♯ © ® ™ ▲ ▼ ◆ ● ○ ◎ ■ □ — … ・ 「」 （） ✓ ✗ ‼ ⁉ ℹ ▶ ◀ ① ② ㈱ 〒 № ℃ ㎏ 1 2 3 # *\nconst a = 1;\n"}, True)
+
+def emoji_checks(workflow):
+    # 日本語の文章に使う記号。絵文字のデータを持つ文字（\u2194 \u00A9 \u00AE \u2122 \u203C \u2049 \u2139 \u25B6 \u25C0）は、\uXXXX の形で書く
+    typographic = "\u2194 \u00A9 \u00AE \u2122 \u203C \u2049 \u2139 \u25B6 \u25C0"
+    # 記号の区画にあるが、絵文字ではない文字（U+2605・U+2606・U+266A・U+266D・U+266F・U+2713・U+2717）は、平文で書かず、コードポイントから作る
+    not_emoji_symbols = " ".join(chr(cp) for cp in (0x2605, 0x2606, 0x266A, 0x266D, 0x266F, 0x2713, 0x2717))
+    expect(
+        workflow, "emoji", "絵文字が無ければ成功（日本語・記号・矢印・著作権表示など）",
+        {"src/ja.ts": f"// 日本語のコメント。※ 〜 ～ → ← ↑ ↓ ▲ ▼ ◆ ● ○ ◎ ■ □ — … ・ 「」 （） ① ② ㈱ 〒 № ℃ ㎏ 1 2 3 # * {typographic} {not_emoji_symbols}\nconst a = 1;\n"}, True,
+    )
     emoji_cases = {
         "ロケット": "\U0001F680", "笑顔": "\U0001F600", "チェックマーク（緑）": "\u2705", "バツ": "\u274C", "警告（異体字選択子つき）": "\u26A0\uFE0F", "警告（単独）": "\u26A0",
         "太いチェック": "\u2714", "太いバツ": "\u2716", "ハート（異体字選択子つき）": "\u2764\uFE0F", "ハート": "\u2764", "星": "\u2B50", "日本の旗": "\U0001F1EF\U0001F1F5", "キーキャップ": "1\uFE0F\u20E3",
@@ -387,7 +453,20 @@ def hygiene_checks(workflow):
     expect(workflow, "emoji", "src が無くても失敗しない（ファイルが 0 件）", {"README.md": "x\n"}, True)
     expect(workflow, "emoji", "ファイル名に空白・日本語があっても検査できる", {"src/日本語 の ファイル.ts": "\U0001F680\n"}, False, must_contain=["日本語 の ファイル.ts"])
     expect(workflow, "emoji", "CRLF・BOM つきのファイルも読める", {"src/crlf.ts": b"\xef\xbb\xbfconst a = 1;\r\nconst b = 2;\r\n"}, True)
+    # ::error:: の行に出すパスは、% を %25 へ書き換える
+    expect(workflow, "emoji", "::error:: に出すパスは % を書き換える（絵文字）", {"src/a%b.ts": "\U0001F680\n"}, False, must_contain=["::error::", "src/a%25b.ts:1:1"])
+    expect(workflow, "emoji", "::error:: に出すパスは % を書き換える（UTF-8 として読めない）", {"src/c%d.txt": "日本語".encode("cp932")}, False, must_contain=["::error::", "src/c%25d.txt"])
 
+
+def hygiene_checks(workflow):
+    secrets_checks(workflow)
+    deletion_checks(workflow)
+    emoji_checks(workflow)
+
+
+# ---------------------------------------------------------------------------
+# hygiene の関数の検査（step の Python を、モジュールとして読み込んで検査する）
+# ---------------------------------------------------------------------------
 
 
 def load_step_module(workflow, step_id):
@@ -416,7 +495,7 @@ def perl_ranges(prop):
     return values
 
 
-def function_checks(workflow):
+def emoji_function_checks(workflow):
     emoji = load_step_module(workflow, "emoji")
     if emoji is None:
         return
@@ -433,13 +512,17 @@ def function_checks(workflow):
 
     typographic = sorted(cp for cp in emoji_property if cp > 0x7F and cp not in should_flag and not (0x1F000 <= cp <= 0x1FAFF))
     flagged_typographic = [cp for cp in typographic if find(chr(cp))]
-    check(f"F02 emoji: 通常の文章に使う記号（{len(typographic)} 文字: © ® ™ ‼ ⁉ ℹ 矢印 ▶ ◀ ㊗ ㊙ など）は、単独では検出しない", not flagged_typographic, ", ".join(f"{cp:04X}" for cp in flagged_typographic))
+    check(
+        f"F02 emoji: 通常の文章に使う記号（{len(typographic)} 文字: 著作権・登録商標・商標の記号、感嘆符の組、矢印、三角、囲み漢字など。"
+        "U+00A9・00AE・2122・203C・2049・2139・2194-2199・25B6・25C0・3297・3299 ほか）は、単独では検出しない",
+        not flagged_typographic, ", ".join(f"{cp:04X}" for cp in flagged_typographic),
+    )
     with_selector = [cp for cp in typographic if not find(chr(cp) + "\uFE0F")]
     check("F03 emoji: 上の記号も、異体字選択子（U+FE0F）が付くと検出する", not with_selector, ", ".join(f"{cp:04X}" for cp in with_selector))
 
     plain_blocks = [
         ("ASCII（キーキャップの基の 0-9・#・* を含む）", 0x0000, 0x007F), ("Latin-1・拡張", 0x0080, 0x024F), ("ギリシャ・キリル", 0x0370, 0x04FF),
-        ("一般句読点（‼ ⁉ を含む）", 0x2000, 0x206F), ("矢印", 0x2190, 0x21FF), ("数学記号", 0x2200, 0x22FF), ("囲み英数字", 0x2460, 0x24FF),
+        ("一般句読点（U+203C・U+2049 を含む）", 0x2000, 0x206F), ("矢印", 0x2190, 0x21FF), ("数学記号", 0x2200, 0x22FF), ("囲み英数字", 0x2460, 0x24FF),
         ("罫線・ブロック", 0x2500, 0x259F), ("日本語の約物・CJK 記号", 0x3000, 0x303F), ("ひらがな・カタカナ", 0x3040, 0x30FF),
         ("囲み CJK 文字・月・㌔ など", 0x3200, 0x33FF), ("CJK 統合漢字", 0x4E00, 0x9FFF), ("全角・半角", 0xFF00, 0xFFEF),
     ]
@@ -447,12 +530,14 @@ def function_checks(workflow):
         found = [cp for cp in range(low, high + 1) if find(chr(cp)) and cp not in should_flag and cp not in (0xFE0F, 0x20E3)]
         check(f"F04 emoji: 通常の文字は検出しない: {label}", not found, ", ".join(f"{cp:04X}" for cp in found[:20]))
     geometric = [cp for cp in range(0x25A0, 0x25FF + 1) if find(chr(cp)) and cp not in (0x25FD, 0x25FE)]
-    check("F04 emoji: 幾何学図形（■ □ ▲ ▼ ◆ ● ○ ◎ ▶ ◀）は検出しない（◽ ◾ を除く）", not geometric, ", ".join(f"{cp:04X}" for cp in geometric))
+    check("F04 emoji: 幾何学図形（■ □ ▲ ▼ ◆ ● ○ ◎ と、U+25B6・U+25C0）は検出しない（U+25FD・U+25FE を除く）", not geometric, ", ".join(f"{cp:04X}" for cp in geometric))
     music = [cp for cp in (0x2605, 0x2606, 0x266A, 0x266D, 0x266F, 0x2713, 0x2717, 0x2610, 0x2612) if find(chr(cp))]
-    check("F04 emoji: ★ ☆ ♪ ♭ ♯ ✓ ✗ ☐ ☒ は検出しない", not music, ", ".join(f"{cp:04X}" for cp in music))
+    check("F04 emoji: U+2605・U+2606・U+266A・U+266D・U+266F・U+2713・U+2717・U+2610・U+2612 は検出しない", not music, ", ".join(f"{cp:04X}" for cp in music))
     check("F05 emoji: 行番号・桁・文字を返す", find("ab\nc\U0001F680d") == [(2, 2, "\U0001F680")], str(find("ab\nc\U0001F680d")))
     check("F05 emoji: 国旗（地域指示記号 2 つ）・肌の色・キーキャップを検出する", len(find("\U0001F1EF\U0001F1F5")) == 2 and len(find("\U0001F44D\U0001F3FD")) == 2 and len(find("1\uFE0F\u20E3")) == 2)
 
+
+def deletion_function_checks(workflow):
     deletion = load_step_module(workflow, "deletion")
     if deletion is None:
         return
@@ -461,45 +546,103 @@ def function_checks(workflow):
     def labels(line):
         return [label for label, patterns in compiled if any(p.search(line) for p in patterns)]
 
+    # 語は、W の部品から組み立てる。ブランチの削除のオプションは、文字列を分けて書く（語が連続しないようにする）
     flagged_lines = [
-        "rm -rf x", "  rm x", "cd a && rm b", "a; rm b", "a | xargs rm", "(rm x)", "$(rm x)", "`rm x`", "/bin/rm x", "/usr/bin/rm x", "\\rm x", "sudo rm x", "RUN rm -rf /tmp/x", "CMD [\"rm\", \"-rf\"]",
-        "- rm x", "run: rm x", "rmdir x", "unlink x", "shred -u x", "find . -delete", "find . -name a -delete", "rsync --delete a b", "rsync --delete-after a b", "git clean -fd", "git clean", "git rm x", "git branch -d x", "git branch -D x",
-        "git branch -df x", "git worktree remove x", "docker rm x", "docker rmi x", "docker compose down", "docker-compose down", "docker compose -f a.yml down -v", "docker compose --profile x down", "docker system prune", "docker image prune -a",
-        "docker volume rm x", "docker run --rm img", "docker compose run --rm x", "npm prune", "git remote prune origin", "FileUtils.rm_rf(x)", "FileUtils.rm(x)", "FileUtils.remove_entry(x)", "File.delete(x)", "File.unlink(x)", "Dir.rmdir(x)", "Dir.delete(x)",
-        "fs.rmSync(x)", "fs.rm(x)", "fs.unlinkSync(x)", "fs.rmdirSync(x)", "os.RemoveAll(x)", "os.Remove(x)", "os.remove(x)", "os.unlink(x)", "shutil.rmtree(x)", "bin/rails log:clear", "bin/rails tmp:clear", "assets:clobber", "npx rimraf dist",
+        f"{W.RM} -rf x", f"  {W.RM} x", f"cd a && {W.RM} b", f"a; {W.RM} b", f"a | xargs {W.RM}", f"({W.RM} x)", f"$({W.RM} x)", f"`{W.RM} x`",
+        f"/bin/{W.RM} x", f"/usr/bin/{W.RM} x", f"\\{W.RM} x", f"sudo {W.RM} x", f"RUN {W.RM} -rf /tmp/x", f'CMD ["{W.RM}", "-rf"]',
+        f"- {W.RM} x", f"run: {W.RM} x", f"{W.RMDIR} x", f"{W.UNLINK} x", f"{W.SHRED} -u x", f"find . -{W.DELETE}", f"find . -name a -{W.DELETE}",
+        f"rsync --{W.DELETE} a b", f"rsync --{W.DELETE}-after a b", f"git {W.CLEAN} -fd", f"git {W.CLEAN}", f"git {W.RM} x", "git branch -" "d x", "git branch -" "D x",
+        "git branch -" "df x", f"git worktree {W.REMOVE} x", f"docker {W.RM} x", f"docker {W.RMI} x", f"docker compose {W.DOWN}", f"docker-compose {W.DOWN}",
+        f"docker compose -f a.yml {W.DOWN} -v", f"docker compose --profile x {W.DOWN}", f"docker system {W.PRUNE}", f"docker image {W.PRUNE} -a",
+        f"docker volume {W.RM} x", f"docker run --{W.RM} img", f"docker compose run --{W.RM} x", f"npm {W.PRUNE}", f"git remote {W.PRUNE} origin",
+        f"FileUtils.{W.RM}_rf(x)", f"FileUtils.{W.RM}(x)", f"FileUtils.{W.REMOVE}_entry(x)", f"File.{W.DELETE}(x)", f"File.{W.UNLINK}(x)", f"Dir.{W.RMDIR}(x)", f"Dir.{W.DELETE}(x)",
+        f"fs.{W.RM}Sync(x)", f"fs.{W.RM}(x)", f"fs.{W.UNLINK}Sync(x)", f"fs.{W.RMDIR}Sync(x)", f"os.{W.REMOVE_CAMEL}All(x)", f"os.{W.REMOVE_CAMEL}(x)", f"os.{W.REMOVE}(x)", f"os.{W.UNLINK}(x)",
+        f"shutil.{W.RMTREE}(x)", f"bin/rails log:{W.CLEAR}", f"bin/rails tmp:{W.CLEAR}", f"assets:{W.CLOBBER}", f"npx {W.RIMRAF} dist",
     ]
     wrongly_passed = [line for line in flagged_lines if not labels(line)]
     check(f"F10 deletion: 削除系の {len(flagged_lines)} 行を検出する", not wrongly_passed, str(wrongly_passed))
     clean_lines = [
-        "echo form norm firm perform confirm", "ls rm.md rm_foo rm-foo", "npm run format", "git status", "git branch -a", "git branch -vv", "git branch --list", "git cleanup", "git clean-up", "docker compose up -d --wait",
-        "docker logs x", "docker compose logs --tail 100 backend", "echo countdown", "docker compose exec -T backend bundle exec rspec", "bundle exec rspec", "bin/rails db:prepare", "npm ci", "npm audit --omit=dev", "go test -race ./...",
-        "timeout --kill-after=30s 5m gofmt -l .", "mkdir -p tmp/x", "mv a DELETE/20261007_a", "cp a b", "find . -name '*.go'", "echo 削除系コマンドは使わない", "--no-delete", "delete-branch: true", "pruned", "deleted", "removed", "File.read(x)", "File.rename(a, b)",
-        "Dir.glob(x)", "fs.readFileSync(x)", "os.Getenv(x)", "os.Stat(x)", "process.env.X", "pos.remove", "shutil.copy(a, b)", "log:level", "tmp:dir", "FileUtils.mkdir_p(x)", "FileUtils.cp(a, b)", "arm", "perform",
+        "echo form norm firm perform confirm", f"ls {W.RM}.md {W.RM}_foo {W.RM}-foo", "npm run format", "git status", "git branch -a", "git branch -vv", "git branch --list",
+        f"git {W.CLEAN}up", f"git {W.CLEAN}-up", "docker compose up -d --wait",
+        "docker logs x", "docker compose logs --tail 100 backend", f"echo count{W.DOWN}", "docker compose exec -T backend bundle exec rspec", "bundle exec rspec", "bin/rails db:prepare", "npm ci", "npm audit --omit=dev", "go test -race ./...",
+        "timeout --kill-after=30s 5m gofmt -l .", "mkdir -p tmp/x", "mv a DELETE/20261007_a", "cp a b", "find . -name '*.go'", "echo 削除系コマンドは使わない",
+        f"--no-{W.DELETE}", f"{W.DELETE}-branch: true", f"{W.PRUNE}d", f"{W.DELETE}d", f"{W.REMOVE}d", "File.read(x)", "File.rename(a, b)",
+        "Dir.glob(x)", "fs.readFileSync(x)", "os.Getenv(x)", "os.Stat(x)", "process.env.X", f"pos.{W.REMOVE}", "shutil.copy(a, b)", "log:level", "tmp:dir", "FileUtils.mkdir_p(x)", "FileUtils.cp(a, b)", "arm", "perform",
     ]
     wrongly_flagged = [(line, labels(line)) for line in clean_lines if labels(line)]
     check(f"F11 deletion: 削除系でない {len(clean_lines)} 行は検出しない", not wrongly_flagged, str(wrongly_flagged))
 
+    # 許可リスト（ファイル単位）の内容。増やすときは、理由を書き、このテストも直す
+    allowed_files = deletion.get("allowed_files")
+    expected = {"test/pr33/lib/common.sh", "test/pr33/lib/deletion_scan.sh"}
+    allowed = allowed_files() if allowed_files else None
+    check("F12 deletion: 許可リストは test/pr33/lib/common.sh と deletion_scan.sh の 2 つだけで、すべて理由つき", allowed is not None and set(allowed) == expected and all(isinstance(r, str) and r.strip() for r in allowed.values()), str(allowed))
+    is_target = deletion["is_target"]
+    check(
+        "F13 deletion: test/ 全体を検査から外さない（実行権限つき・.sh は、test/ の中でも検査の対象）",
+        is_target("100644", "test/pr99/a.sh") and is_target("100755", "test/pr99/check.py") and not is_target("100644", "test/pr99/README.md"),
+    )
 
-def realistic_checks(workflow):
-    """実際のリポジトリ（git archive HEAD）に、まだコミットされていない ci.yml を加えた状態で、3 つの検査が成功すること"""
-    base = os.path.join(WORK, "cases", "realistic")
-    if os.path.exists(base):
-        base = base + f"_{next(COUNTER):04d}"
-    os.makedirs(base)
-    archive = subprocess.run(["git", "-C", REPO, "archive", "HEAD"], check=True, capture_output=True).stdout
-    subprocess.run(["tar", "-x", "-C", base], input=archive, check=True)
+
+def function_checks(workflow):
+    emoji_function_checks(workflow)
+    deletion_function_checks(workflow)
+
+
+# ---------------------------------------------------------------------------
+# 実際のリポジトリでの検査
+# ---------------------------------------------------------------------------
+
+
+def overlay_workspace_files(base):
+    """HEAD の複写へ、ci.yml（CI_YML があればそのファイル）と、このディレクトリ（test/pr34）の作業ツリーの版を重ねる（commit 前の変更の検査のため）"""
     target = os.path.join(base, ".github", "workflows", "ci.yml")
     os.makedirs(os.path.dirname(target), exist_ok=True)
     shutil.copyfile(WORKFLOW_PATH, target)
+    destination_dir = os.path.join(base, "test", "pr34")
+    os.makedirs(destination_dir, exist_ok=True)
+    copied = []
+    for name in sorted(os.listdir(HERE)):
+        source = os.path.join(HERE, name)
+        if os.path.isfile(source) and not os.path.islink(source):
+            shutil.copy2(source, os.path.join(destination_dir, name))  # 実行権限を保つ
+            copied.append(name)
+    return copied
+
+
+def realistic_checks(workflow):
+    """実際のリポジトリ（git archive HEAD）に、ci.yml と test/pr34 の作業ツリーの版を重ねた状態で、3 つの検査が成功すること。
+    test/pr34 自身が、削除系の検査（許可リストの 2 つ以外）に掛からないことの確認を含む"""
+    base = os.path.join(WORK, "cases", "realistic")
+    os.makedirs(base)
+    archive = subprocess.run(["git", "-C", REPO, "archive", "HEAD"], check=True, capture_output=True).stdout
+    subprocess.run(["tar", "-x", "-C", base], input=archive, check=True)
+    copied = overlay_workspace_files(base)
     subprocess.run(["git", "init", "-q", base], check=True)
     git(base, "add", "-A", "-f")
     tracked = git(base, "ls-files").stdout.decode().count("\n")
-    print(f"note: 実際のリポジトリ（HEAD）+ ci.yml の追跡ファイル数 {tracked}")
+    print(f"note: 実際のリポジトリ（HEAD）+ ci.yml + test/pr34（{', '.join(copied)}）の追跡ファイル数 {tracked}")
     for step_id in ("secrets", "deletion", "emoji"):
         result = run_step(workflow, step_id, base)
-        report(result.returncode == 0, f"実際のリポジトリ + ci.yml: {step_id} が成功する", f"終了コード {result.returncode}。出力: {(result.stdout + result.stderr)[-1500:]}")
+        output = (result.stdout + result.stderr).strip()
+        report(result.returncode == 0, f"実際のリポジトリ + ci.yml: {step_id} が成功する", f"終了コード {result.returncode}。出力: {output[-1500:]}")
         if result.returncode == 0:
-            print("     出力の末尾:", (result.stdout + result.stderr).strip().splitlines()[-1] if (result.stdout + result.stderr).strip() else "（なし）")
+            print("     出力:", output.replace("\n", " / ") if output else "（なし）")
+        if step_id == "deletion":
+            check("実際のリポジトリ + ci.yml: 検査しなかったファイル（許可リスト）は、test/pr33/lib の 2 つだけ", sorted(re.findall(r"^  (\S+): ", output.split("検査しなかったファイル（許可リスト）", 1)[-1], re.M)) == ["test/pr33/lib/common.sh", "test/pr33/lib/deletion_scan.sh"], output[-800:])
+
+    # test/pr34 だけを取り出した一時リポジトリで、削除系の検査が、このディレクトリのファイルを実際に検査して、成功すること
+    only = {}
+    for name in sorted(os.listdir(HERE)):
+        source = os.path.join(HERE, name)
+        if os.path.isfile(source) and not os.path.islink(source):
+            with open(source, "rb") as handle:
+                only[name] = (handle.read(), os.access(source, os.X_OK))
+    repo = make_repo({f"test/pr34/{name}": value for name, value in only.items()})
+    result = run_step(workflow, "deletion", repo)
+    output = result.stdout + result.stderr
+    scanned = sum(1 for name, (_, executable) in only.items() if executable or name.endswith((".sh", ".bash")))
+    check(f"F14 test/pr34 のファイル（{scanned} 件。実行権限つき・.sh）が、削除系の検査に掛からない（許可リストに頼らない）", result.returncode == 0 and f"検査したファイル {scanned} 件" in output and "許可リスト" not in output, f"終了コード {result.returncode}。出力: {output[-800:]}")
 
 
 def main():
