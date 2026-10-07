@@ -1,0 +1,11 @@
+/* 外部リンク。出どころ: app-ui/Terms.dc.html の外部リンク（色は --teal）。
+   文章の中のリンクが、色だけで見分けられないよう、下線を常に付ける。 */
+.link {
+  color: var(--teal);
+  text-decoration: underline;
+  text-underline-offset: var(--sp-4);
+}
+
+.link:hover {
+  color: var(--white);
+}

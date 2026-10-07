@@ -1,0 +1,11 @@
+/* カードなどの中の段落。出どころ: app-ui/Terms.dc.html の .note（本文）と、その補足（12px・--silver-70）。 */
+.note {
+  color: var(--silver);
+  font-size: var(--fs-14);
+  line-height: var(--lh-body);
+}
+
+.fine {
+  color: var(--silver-70);
+  font-size: var(--fs-12);
+}

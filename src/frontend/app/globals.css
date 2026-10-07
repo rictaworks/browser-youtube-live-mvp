@@ -1,0 +1,51 @@
+/* 全画面に共通のスタイル。読み込みの順序: デザインシステムのトークン（styles/tokens/ のコピー）→ アプリ固有のトークン → 全体の規則。 */
+@import "../styles/tokens/colors.css";
+@import "../styles/tokens/typography.css";
+@import "../styles/tokens/spacing.css";
+@import "../styles/tokens/effects.css";
+@import "../styles/tokens/base.css";
+@import "../styles/app-colors.css";
+@import "../styles/app-tokens.css";
+
+/* 出どころ: app-ui/ の各画面の body・a。tokens/base.css の body は、書体名を直接書くため、
+   next/font につないだ --font-sans（styles/app-tokens.css）で上書きする。 */
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--font-sans);
+  font-size: var(--fs-14);
+  line-height: var(--lh-ui);
+}
+
+a {
+  color: var(--silver);
+  text-decoration: none;
+}
+
+a:hover {
+  color: var(--teal);
+}
+
+/* フォーカスの輪郭（要件 17.6）: キーボードでフォーカスした部品は、すべて輪郭を表示する。outline を消さない。
+   色は、すべての面（ページ・カード・フッター・通知）に対して 3:1 以上（styles/contrast.test.ts）。 */
+:focus-visible {
+  outline: var(--focus-ring-width) solid var(--white);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* 動きの低減（要件 17.6）: 動きの低減を求める設定では、遷移・アニメーション・滑らかなスクロールを止める。 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+}

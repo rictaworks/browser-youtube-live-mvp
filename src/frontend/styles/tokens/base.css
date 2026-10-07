@@ -1,0 +1,18 @@
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: 'Inter', 'Noto Sans JP', sans-serif;
+  overflow-x: hidden;
+  cursor: default;
+}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg2); }
+::-webkit-scrollbar-thumb { background: var(--teal); border-radius: 2px; }
+@keyframes scrollAnim {
+  0%,100% { transform: translateX(-50%) translateY(0); opacity:1; }
+  80% { transform: translateX(-50%) translateY(12px); opacity:0; }
+}
+.fade-in { opacity: 0; transform: translateY(30px); transition: opacity 0.8s ease, transform 0.8s ease; }
+.fade-in.visible { opacity: 1; transform: translateY(0); }

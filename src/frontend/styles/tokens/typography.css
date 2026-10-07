@@ -1,0 +1,44 @@
+:root {
+  --font-sans: 'Inter', 'Noto Sans JP', sans-serif;
+  --font-display: 'Playfair Display', serif;
+
+  --fs-hero: clamp(42px, 7vw, 88px); /* @kind font */
+  --fs-panel-title: clamp(28px, 4vw, 52px); /* @kind font */
+  --fs-section-title: clamp(28px, 4vw, 48px); /* @kind font */
+  --fs-stat-big: clamp(36px, 4vw, 52px); /* @kind font */
+  --fs-hero-sub: clamp(12px, 1.6vw, 15px); /* @kind font */
+  --fs-36: 36px; /* @kind font */
+  --fs-28: 28px; /* @kind font */
+  --fs-20: 20px; /* @kind font */
+  --fs-16: 16px; /* @kind font */
+  --fs-15: 15px; /* @kind font */
+  --fs-14: 14px; /* @kind font */
+  --fs-13: 13px; /* @kind font */
+  --fs-12: 12px; /* @kind font */
+  --fs-11: 11px; /* @kind font */
+  --fs-10: 10px; /* @kind font */
+  --fs-9: 9px; /* @kind font */
+  --fs-8: 8px; /* @kind font */
+
+  --fw-light: 300; /* @kind font */
+  --fw-regular: 400; /* @kind font */
+  --fw-medium: 500; /* @kind font */
+  --fw-semibold: 600; /* @kind font */
+  --fw-bold: 700; /* @kind font */
+
+  --lh-hero: 1.1; /* @kind font */
+  --lh-title: 1.2; /* @kind font */
+  --lh-body: 1.9; /* @kind font */
+  --lh-sub: 1.8; /* @kind font */
+
+  --ls-005: 0.05em; /* @kind font */
+  --ls-008: 0.08em; /* @kind font */
+  --ls-01: 0.1em; /* @kind font */
+  --ls-015: 0.15em; /* @kind font */
+  --ls-02: 0.2em; /* @kind font */
+  --ls-025: 0.25em; /* @kind font */
+
+  /* Semantic */
+  --text-display: var(--font-display); /* @kind font */
+  --text-ui: var(--font-sans); /* @kind font */
+}

@@ -1,0 +1,28 @@
+/* 2 カラムの入れ物（スタジオ）。1,024 px 以上は 2 カラム（左に主な内容、右に幅 320 px のパネル）、未満は 1 カラム（主な内容、パネルの順に積む）。
+   要件 17.4。出どころ: app-ui/Studio.dc.html の .studio・.stack。 */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--sp-24);
+  width: 100%;
+  max-width: var(--layout-studio-max);
+  margin: 0 auto;
+  padding: var(--sp-8) var(--section-pad-x-mobile) var(--sp-40);
+}
+
+.main,
+.aside {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-16);
+  min-width: 0;
+}
+
+@media (min-width: 1024px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) var(--layout-aside-width);
+    padding-right: var(--section-pad-x);
+    padding-left: var(--section-pad-x);
+  }
+}

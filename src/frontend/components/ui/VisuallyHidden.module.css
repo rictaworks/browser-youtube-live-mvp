@@ -1,0 +1,9 @@
+/* 画面から隠し、支援技術には読ませる。display: none や hidden では、支援技術にも読まれなくなるため使わない。 */
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
