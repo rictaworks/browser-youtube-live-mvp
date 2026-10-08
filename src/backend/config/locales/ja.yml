@@ -1,8 +1,14 @@
-# 管理画面（アプリケーション層。BASIC 認証）で表示する文言の置き場。日本語版のみ（requirements.md 17・19 章）。
+# 管理画面（アプリケーション層。BASIC 認証）と、開発・テストのみの疑似の画面で表示する文言の置き場。日本語版のみ（requirements.md 17・19 章）。
 #
-# 利用者に表示する文章は、コードへ直書きせず、ここ（Rails の管理画面）か、フロントエンドの文言カタログ（src/frontend/messages/）へ置く。
+# 利用者に表示する文章は、コードへ直書きせず、ここ（Rails の画面）か、フロントエンドの文言カタログ（src/frontend/messages/）へ置く。
 # 文章は、Claude が創作しない（CLAUDE.md「執筆体制」。公開用の文章は Gemini が書く）。モック（app-ui/）の文言を仮置きする場合は、
 # 「仮置き」と注記する。API の応答は、符号と数値だけを返し、文言を含まない（src/contracts/http-api.md）。
 #
-# 本 issue（アプリケーション基盤）では、管理画面の文言は無い。管理画面の issue が、ここへ足す。
-ja: {}
+# 管理画面の文言は、管理画面の issue が、ここへ足す。
+ja:
+  # 疑似の Google のアカウント選択の画面（issue #8。開発・テストのみ。本番には存在しない）。
+  # 仮置き: 新しい文章を創作しない。表示するのは、見出しの固有名詞と、固定の 3 アカウント名（config/external_services.yml）だけ。
+  dev:
+    google:
+      authorize:
+        title: Google

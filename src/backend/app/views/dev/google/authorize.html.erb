@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title><%= t(".title") %></title>
+<style>
+body { font-family: sans-serif; margin: 2rem; }
+li { margin: 1rem 0; }
+a { font-size: 1.25rem; }
+</style>
+</head>
+<body>
+<h1><%= t(".title") %></h1>
+<ul>
+<% @accounts.each do |account| %>
+<li><a href="<%= account[:href] %>"><%= account[:label] %></a></li>
+<% end %>
+</ul>
+</body>
+</html>

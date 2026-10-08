@@ -75,6 +75,8 @@ GEM
       securerandom (>= 0.3)
       tzinfo (~> 2.0, >= 2.0.5)
       uri (>= 0.13.1)
+    addressable (2.9.0)
+      public_suffix (>= 2.0.2, < 8.0)
     ast (2.4.3)
     base64 (0.3.0)
     bigdecimal (4.1.3)
@@ -86,6 +88,9 @@ GEM
       thor (~> 1.0)
     concurrent-ruby (1.3.8)
     connection_pool (3.0.2)
+    crack (1.0.1)
+      bigdecimal
+      rexml
     crass (1.0.7)
     date (3.5.1)
     diff-lcs (1.6.2)
@@ -99,6 +104,7 @@ GEM
       railties (>= 6.1.0)
     globalid (1.4.0)
       activesupport (>= 6.1)
+    hashdiff (1.2.1)
     i18n (1.15.2)
       concurrent-ruby (~> 1.0)
     io-console (0.9.4)
@@ -108,6 +114,8 @@ GEM
       rdoc (>= 4.0.0)
       reline (>= 0.4.2)
     json (2.21.2)
+    jwt (3.3.0)
+      base64
     language_server-protocol (3.17.0.6)
     lint_roller (1.1.0)
     logger (1.7.0)
@@ -166,6 +174,7 @@ GEM
       prettyprint
     prettyprint (0.2.0)
     prism (1.9.0)
+    public_suffix (7.0.5)
     puma (8.0.2)
       nio4r (~> 2.0)
     racc (1.8.1)
@@ -221,6 +230,7 @@ GEM
     regexp_parser (2.13.1)
     reline (0.7.0)
       io-console (~> 0.5)
+    rexml (3.4.4)
     rspec-core (3.13.6)
       rspec-support (~> 3.13.0)
     rspec-expectations (3.13.5)
@@ -278,6 +288,10 @@ GEM
     unicode-emoji (4.3.0)
     uri (1.1.1)
     useragent (0.16.11)
+    webmock (3.26.4)
+      addressable (>= 2.8.0)
+      crack (>= 0.3.2)
+      hashdiff (>= 0.4.0, < 2.0.0)
     websocket-driver (0.8.2)
       base64
       websocket-extensions (>= 0.1.0)
@@ -300,12 +314,14 @@ DEPENDENCIES
   bundler-audit
   factory_bot_rails
   json (~> 2.9)
+  jwt (~> 3.3)
   pg (~> 1.1)
   puma (>= 5.0)
   rails (~> 8.1.3, >= 8.1.3.1)
   rspec-rails
   rubocop-rails-omakase
   tzinfo-data
+  webmock
 
 BUNDLED WITH
    2.6.9

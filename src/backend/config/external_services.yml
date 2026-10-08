@@ -1,0 +1,30 @@
+# 外部サービスの URL と、それに付随する固定値（issue #8。requirements.md 3 章・6.1）。コードに直書きしない。
+# Rails.application.config_for(:external_services) で読む（ExternalServices.config）。環境ごとの違いは無い（shared のみ）。
+# 実際の外部サービスを使うかどうかは、この設定ではなく、環境の判定（AppEnvironment#external_services）で決める。
+# 資格情報（クライアント ID・秘密値）は、ここに書かない（環境変数。requirements.md 29.4）。
+#
+# 出どころ（取得 2026-10-07。WORK/factcheck/20261007_external-facts.md）
+#   Google の OpenID Connect の探索文書: https://accounts.google.com/.well-known/openid-configuration
+#   reCAPTCHA の検証: https://developers.google.com/recaptcha/docs/verify
+shared:
+  google_oidc:
+    authorization_endpoint: https://accounts.google.com/o/oauth2/v2/auth
+    token_endpoint: https://oauth2.googleapis.com/token
+    jwks_uri: https://www.googleapis.com/oauth2/v3/certs
+    # ID トークンの iss。Google は 2 つの形のどちらでも発行する（https://developers.google.com/identity/openid-connect/openid-connect）
+    issuers:
+      - https://accounts.google.com
+      - accounts.google.com
+    # 公開鍵（JWKS）のキャッシュ。キャッシュの有効期間と、kid が見つからないときの再取得の最短の間隔（秒）
+    jwks_cache_seconds: 3600
+    jwks_min_refetch_seconds: 60
+  recaptcha:
+    siteverify_endpoint: https://www.google.com/recaptcha/api/siteverify
+  # 開発・テストの疑似の Google（FakeGoogleOidc。本番では使わない）。固定の 3 アカウント（sub）と、認可コードの有効期間
+  fake_google:
+    accounts:
+      - dev-user-1
+      - dev-user-2
+      - dev-user-3
+    authorize_path: /api/dev/google/authorize
+    code_lifetime_seconds: 300

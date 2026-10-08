@@ -40,8 +40,11 @@ Rails.application.configure do
   # Highlight code that triggered database queries in logs.
   config.active_record.verbose_query_logs = true
 
-  # Append comments with runtime information tags to SQL queries in logs.
-  config.active_record.query_log_tags_enabled = true
+  # SQL のコメントに実行時の情報（タグ）を付ける設定は、無効にする（issue #8 で変更）。有効にすると、Rails は prepared statements を
+  # 無効にし、SQL の文に値が直接入る。ログの SQL に、Google の利用者識別子（sub）・配信のタイトル・暗号化したトークンなどが、
+  # そのまま出てしまう（prepared statements では、機密の列の値は、filter_attributes で [FILTERED] になる。本番・テストと同じ挙動にそろえる）。
+  # spec/config/development_sql_log_spec.rb が、有効にしていないことを検査する。
+  config.active_record.query_log_tags_enabled = false
 
   # Highlight code that enqueued background job in logs.
   config.active_job.verbose_enqueue_logs = true

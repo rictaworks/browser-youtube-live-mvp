@@ -1,0 +1,43 @@
+# 変異の一覧。形式: <重要度>|<変異の名前>|<実行するスペック（空白区切り）>
+#   重要度  key = 既定で実行する（認証の安全に直結するもの） / all = MUTATION_SET=all のときだけ実行する
+# 各変異は、mutations.rb の mutate_<名前>。アプリケーションの 1 か所を壊して、スペックが落ちることを確かめる
+key|login_state_unchecked|spec/services/login_procedure_spec.rb spec/requests/api/auth_callback_spec.rb
+key|login_error_param_ignored|spec/services/login_procedure_spec.rb spec/requests/api/auth_callback_spec.rb
+key|fake_pkce_unchecked|spec/gateways/fake_google_oidc_spec.rb spec/services/login_procedure_spec.rb
+key|fake_allowed_in_production|spec/gateways/fake_google_oidc_spec.rb spec/gateways/fake_recaptcha_verifier_spec.rb
+key|production_selects_fake|spec/gateways/external_services_spec.rb spec/requests/dev/dev_routes_spec.rb
+key|oidc_nonce_unchecked|spec/gateways/google_oidc_client_spec.rb spec/requests/api/auth_callback_spec.rb
+key|oidc_exp_unchecked|spec/gateways/google_oidc_client_spec.rb
+key|oidc_algorithms_widened|spec/gateways/google_oidc_client_spec.rb
+key|oidc_iss_unchecked|spec/gateways/google_oidc_client_spec.rb
+key|oidc_aud_unchecked|spec/gateways/google_oidc_client_spec.rb
+key|oidc_client_secret_not_sent|spec/gateways/google_oidc_client_spec.rb spec/requests/api/auth_callback_spec.rb
+key|oidc_scope_widened|spec/gateways/google_oidc_client_spec.rb spec/requests/api/auth_login_start_spec.rb
+key|jwks_stale_fallback|spec/gateways/google_jwks_cache_spec.rb
+key|recaptcha_remoteip_sent|spec/gateways/recaptcha_verifier_spec.rb spec/requests/api/auth_login_start_spec.rb
+key|recaptcha_quota_unchecked|spec/gateways/recaptcha_verifier_spec.rb
+key|recaptcha_error_codes_unchecked|spec/gateways/recaptcha_verifier_spec.rb
+key|recaptcha_fail_open_on_unreachable|spec/gateways/recaptcha_verifier_spec.rb spec/requests/api/auth_login_start_spec.rb
+key|registry_hold_ignored|spec/services/account_registry_spec.rb spec/requests/api/auth_callback_spec.rb
+key|registry_hold_one_day_late|spec/services/account_registry_spec.rb spec/requests/api/auth_callback_spec.rb
+key|session_not_rotated|spec/requests/api/auth_callback_spec.rb
+key|oauth_cookie_kept|spec/requests/api/auth_callback_spec.rb
+key|bot_check_skipped|spec/requests/api/auth_login_start_spec.rb
+key|bot_indeterminate_passes|spec/requests/api/auth_login_start_spec.rb
+key|rate_limit_skipped|spec/requests/api/auth_login_start_spec.rb
+key|redirect_to_backend_host|spec/requests/api/auth_callback_spec.rb
+key|p1_open_by_default|spec/controllers/api/login_policy_spec.rb spec/requests/api/login_policy_routes_spec.rb
+key|cookie_secure_off|spec/requests/api/auth_production_cookies_spec.rb
+key|dev_open_redirect|spec/requests/dev/google_authorize_spec.rb
+key|http_tls_unverified|spec/gateways/external_http_spec.rb
+key|http_follows_redirects|spec/gateways/external_http_spec.rb spec/gateways/google_oidc_client_spec.rb
+all|login_last_login_not_updated|spec/services/login_procedure_spec.rb
+all|fake_code_unsigned|spec/gateways/fake_google_oidc_spec.rb
+all|recaptcha_success_unchecked|spec/gateways/recaptcha_verifier_spec.rb
+all|recaptcha_action_unchecked|spec/gateways/recaptcha_verifier_spec.rb spec/requests/api/auth_login_start_spec.rb
+all|recaptcha_hostname_unchecked|spec/gateways/recaptcha_verifier_spec.rb spec/requests/api/auth_login_start_spec.rb
+all|recaptcha_challenge_ts_unchecked|spec/gateways/recaptcha_verifier_spec.rb
+all|recaptcha_score_boundary|spec/gateways/recaptcha_verifier_spec.rb
+all|registry_digest_is_plain_sub|spec/services/account_registry_spec.rb
+all|logout_keeps_session|spec/requests/api/auth_logout_spec.rb
+all|http_timeouts_long|spec/gateways/external_http_spec.rb
