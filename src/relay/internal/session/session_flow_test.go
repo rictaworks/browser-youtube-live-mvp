@@ -245,6 +245,10 @@ func TestProvisioningDoesNotBlockTheSession(t *testing.T) {
 
 	// 準備の最中に、状態報告を受け、心拍を送る
 	conn.report(reportJSON(`[{"kind":"source_added","detail":{"source":"camera"}}]`, func(m map[string]string) { m["state"] = `"live"` }))
+	// 状態報告を取り込み終えてから、時計を進める。待たずに進めると、取り込みセッションのゴルーチンが遅れた実行環境では、
+	// 時計の起床と待ち行列の状態報告が同時に待ち状態になり、どちらが先に選ばれるかが決まらない
+	// （起床が先だと、状態報告を載せない心拍が先に送られる）
+	h.barrierAll()
 	h.clock.Advance(2 * time.Second)
 	h.barrierAll()
 	deadline := time.Now().Add(5 * time.Second)
