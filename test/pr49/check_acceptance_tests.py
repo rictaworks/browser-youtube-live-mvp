@@ -29,6 +29,12 @@ REQUIRED = {
         "TestTimeoutIsUnavailableAndKeepsTheDeadlineCause",
         "TestCallerCancellationIsNotUnavailable",
         "TestTheSecretTravelsOnlyInTheHeader",
+        # レビュー R3：世代が決まる前の心拍（世代 0・連番 0）を、送らない
+        "TestHeartbeatChecksItsArgumentsBeforeSending",
+        "TestHeartbeatAcceptsTheSmallestValidEpochAndSeq",
+        # レビュー R7：本文を最後まで読めなかった応答は、ErrUnavailable（読み取りの失敗を捨てない）。呼び出し側の取り消しは別
+        "TestAResponseBodyThatCannotBeReadToTheEndIsUnavailable",
+        "TestCancellationWhileReadingTheBodyIsNotUnavailable",
         # 事象は保持して再送する（上限あり・指数的な待機・順序を保つ）
         "TestEventsAreSentInOrderOneAtATime",
         "TestEventsAreHeldAndResentWithExponentialBackoff",
@@ -37,12 +43,19 @@ REQUIRED = {
         "TestNotFoundDropsThatBroadcastsEventsOnly",
         "TestShutdownWaitsForTheQueueToDrain",
         "TestTheWorkerStopsWhenTheQueueIsEmpty",
+        "TestNewEventQueueChecksItsArguments",  # レビュー R7：ログの出力先は必須（nil を拒否する）
         # 秘密値・チケット・配信キー・取り込み先を、ログ・エラー・%v に出さない
         "TestSensitiveValuesAreRedactedWhenFormatted",
         "TestSensitiveValuesAreRedactedInJSONAndText",
         "TestSensitiveValuesAreRedactedInStructuredLogs",
         "TestErrorTextIsFixedVocabularyAndDoesNotEchoTheBody",
         "TestQueueLogsDoNotContainErrorText",
+        # レビュー R1：内部通信クライアント自身を、書式化しても共有の秘密値が出ない（値でもポインタでも・fmt・log・slog）
+        "TestFormattingTheClientNeverExposesTheSharedSecret",
+        "TestTheClientPrintsOnlyAFixedText",
+        "TestTheClientDefinesEveryFormattingGuard",
+        "TestTheClientIsRedactedInStructuredLogs",
+        "TestEncodingTheClientNeverExposesTheSharedSecret",
     ],
     "internal/session": [
         # 接続：hello の期限・照合・照合前の破棄・プロトコル違反・大きさの上限
@@ -73,8 +86,13 @@ REQUIRED = {
         "TestExcessiveIngressWhileStreamingDisconnectsAbortsAndBans",
         "TestIngressExactlyAtTheLimitIsNotExcessive",
         "TestABroadcastDisconnectedForExcessiveIngressIsRefusedUntilTheBanExpires",
+        # レビュー R2：閉じている最中（切断が終わらない間）の再接続も、待っている間に成立した禁止も、受け付けない
+        "TestAReconnectionWhileAnExcessiveSessionIsStillClosingIsRefused",
+        "TestARetryAfterAClosingSessionChecksTheBanAgain",
         # 心拍：2 秒・統計・出来事の保持・指示・通知・60 秒の喪失（59 秒では継続）
         "TestHeartbeatIsSentEveryTwoSeconds",
+        "TestNoHeartbeatIsSentBeforeTheEpochIsKnown",  # レビュー R3：世代が決まる前は、心拍を送らない（連番も使わない）
+        "TestEveryHeartbeatCarriesAPositiveEpoch",
         "TestHeartbeatCarriesThePublishingFlagAndTheSentBytes",
         "TestUnansweredHeartbeatIsResentIdenticallyAndEventsAreNotLost",
         "TestBrowserReportIsCarriedByTheNextHeartbeatWithoutLosingEvents",
@@ -115,10 +133,14 @@ REQUIRED = {
         "TestFormattingTheSessionStructuresNeverExposesSecrets",
         "TestEverythingTheSessionHeldIsDroppedWhenItEnds",
         "TestTheFactoryRejectsDestinationsThatAreNotYouTubeIngest",
+        "TestDependenciesAreRequired",  # レビュー R7：ログの出力先は必須（nil を拒否する）
         # 走査器と、ソースの規則
         "TestScannerFindsViolations",
         "TestSessionSourcesFollowTheRules",
         "TestBackendSourcesFollowTheRules",
+        # レビュー R1：機密を非公開の欄に持つ構造体は、整形のメソッドを持つ（取り込みセッション・台帳・接続・内部通信クライアント）
+        "TestStructsHoldingSecretsDefineFormatters",
+        "TestFormatterScannerFindsUnprotectedStructs",
     ],
 }
 

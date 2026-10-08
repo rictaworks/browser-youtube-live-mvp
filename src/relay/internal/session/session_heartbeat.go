@@ -38,6 +38,12 @@ func (s *IngestSession) tickHeartbeat(now time.Time) {
 		return
 	}
 	s.hb.next = now.Add(s.opts.HeartbeatInterval)
+	if s.epoch < 1 {
+		// 送出世代が決まる前（照合の結果を得る前。台帳が、他のセッションを閉じ終えるのを待つ間など）は、送らない。
+		// 世代 0 の心拍は、アプリケーションに古い世代と受け取られ、stale_epoch の停止の指示で、取り込みセッションを止めかねない。
+		// 連番も使わない（世代が決まったあとの最初の心拍が、連番 1）。拍の時刻だけが進む
+		return
+	}
 	if s.hb.inFlight {
 		return
 	}

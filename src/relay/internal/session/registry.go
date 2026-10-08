@@ -229,18 +229,20 @@ func (r *Registry) verifyAsync(c *Connection, ticket backend.Ticket) {
 	}()
 }
 
-// attach は、照合に成功した接続を、取り込みセッションの送信元にする。
-//  1. 受信量の超過で切った配信なら、受け付けない（fatal(bitrate_exceeded)）
+// attach は、照合に成功した接続を、取り込みセッションの送信元にする。次を、試行ごとに行う（閉じている最中の取り込みセッションに
+// 当たって、その終了を待ったあとの作り直しでも、1 から行い直す）。
+//  1. 受信量の超過で切った配信なら、受け付けない（fatal(bitrate_exceeded)）。禁止は、取り込みセッションが閉じる手順に入った
+//     時点で成立する（完全に終わるのを待たない）ので、待っている間に成立した禁止も、ここで見直される
 //  2. 取り込みセッションを引く。無ければ（中継の再起動後・初回）、新たに作って登録する
 //  3. 同一アカウントの他の取り込みセッションを、すべて閉じる（10.5。完了を待つ）
 //  4. 送信元を差し替える（古い世代の接続は、直ちに閉じる）。accepted は、そのあとで返る
 func (r *Registry) attach(c *Connection, result backend.VerifyResult) {
-	if r.isBanned(result.BroadcastID) {
-		r.deps.Logger.Warn("a banned broadcast tried to reconnect", slog.String("broadcast_id", result.BroadcastID))
-		c.fatalAndClose(contract.FatalCodeBitrateExceeded, CloseNormal)
-		return
-	}
 	for attempt := 0; attempt < maxAttachAttempts; attempt++ {
+		if r.isBanned(result.BroadcastID) {
+			r.deps.Logger.Warn("a banned broadcast tried to reconnect", slog.String("broadcast_id", result.BroadcastID))
+			c.fatalAndClose(contract.FatalCodeBitrateExceeded, CloseNormal)
+			return
+		}
 		s, err := r.sessionFor(result)
 		if err != nil {
 			r.deps.Logger.Error("an ingest session could not be prepared", slog.String("broadcast_id", result.BroadcastID), slog.String("class", errorClass(err)))
@@ -290,6 +292,13 @@ func (r *Registry) sessionFor(result backend.VerifyResult) (*IngestSession, erro
 }
 
 // ---- 受信量の超過で切った配信 ----
+
+// ban は、配信への再接続を、一定の期間、受け付けないことにする（取り込みセッションが、閉じる手順に入った時点で呼ぶ）。
+func (r *Registry) ban(broadcastID string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.banLocked(broadcastID)
+}
 
 func (r *Registry) isBanned(broadcastID string) bool {
 	r.mu.Lock()

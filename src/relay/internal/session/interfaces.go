@@ -105,14 +105,15 @@ type Deps struct {
 	Events     EventSink
 	Publishers PublisherFactory
 	Clock      Clock
-	// Logger は、異常の記録の出力先。nil なら、捨てる。メッセージごとのログは出さない。秘密値・チケット・配信キー・取り込み先を出さない。
+	// Logger は、異常の記録の出力先（必須）。nil は拒否する（記録が黙って捨てられ、異常に気づけなくならないように。
+	// 捨ててよい試験は、捨てる出力先を明示して渡す）。メッセージごとのログは出さない。秘密値・チケット・配信キー・取り込み先を出さない。
 	Logger  *slog.Logger
 	Options Options
 }
 
-// normalized は、依存を検査し、設定値を整える。
+// normalized は、依存を検査し、設定値を整える。Backend・Events・Publishers・Clock・Logger のどれかが無ければ ErrInvalidDeps。
 func (d Deps) normalized() (Deps, error) {
-	if d.Backend == nil || d.Events == nil || d.Publishers == nil || d.Clock == nil {
+	if d.Backend == nil || d.Events == nil || d.Publishers == nil || d.Clock == nil || d.Logger == nil {
 		return Deps{}, ErrInvalidDeps
 	}
 	options, err := d.Options.normalized()
@@ -120,8 +121,5 @@ func (d Deps) normalized() (Deps, error) {
 		return Deps{}, err
 	}
 	d.Options = options
-	if d.Logger == nil {
-		d.Logger = slog.New(slog.DiscardHandler)
-	}
 	return d, nil
 }

@@ -150,17 +150,15 @@ type EventQueue struct {
 	dropped  int
 }
 
-// NewEventQueue は、事象のキューを作る。sender・waiter が nil、設定が不正なら ErrInvalidConfig。log が nil なら、ログを捨てる。
+// NewEventQueue は、事象のキューを作る。sender・waiter・log が nil、設定が不正なら ErrInvalidConfig。
+// log は必須（事象の捨て・再送の記録が、黙って捨てられ、異常に気づけなくならないように。捨ててよい試験は、捨てる出力先を明示して渡す）。
 func NewEventQueue(sender EventSender, waiter Waiter, opts QueueOptions, log *slog.Logger) (*EventQueue, error) {
-	if sender == nil || waiter == nil {
-		return nil, fmt.Errorf("%w: the sender and the waiter are required", ErrInvalidConfig)
+	if sender == nil || waiter == nil || log == nil {
+		return nil, fmt.Errorf("%w: the sender, the waiter and the logger are required", ErrInvalidConfig)
 	}
 	normalized, err := opts.normalized()
 	if err != nil {
 		return nil, err
-	}
-	if log == nil {
-		log = slog.New(slog.DiscardHandler)
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &EventQueue{sender: sender, waiter: waiter, opts: normalized, log: log, ctx: ctx, cancel: cancel}, nil

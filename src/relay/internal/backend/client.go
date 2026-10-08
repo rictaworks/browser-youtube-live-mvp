@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -128,6 +129,27 @@ func NewClient(cfg Config) (*Client, error) {
 	return &Client{base: base, secret: cfg.Secret, httpClient: newHTTPClient(cfg.HTTPClient), timeouts: timeouts}, nil
 }
 
+// ---- 整形（共有の秘密値を出さない） ----
+//
+// fmt は、非公開の欄のメソッドを呼ばない。欄の型（Secret）が伏せる実装を持っていても、Client 自身が整形を握らないと、
+// %+v・%#v・log.Printf・slog.Any で、共有の秘密値（RELAY_SHARED_SECRET）と内部通信の接続先が、そのまま出る。
+// 受け手は値（Client の値でも *Client でも効く）。出すのは固定の文字列だけで、欄の中身は含めない。
+
+// redactedClient は、Client を整形したときの、固定の文字列。
+const redactedClient = "backend.Client{}"
+
+// String は、固定の文字列を返す。
+func (Client) String() string { return redactedClient }
+
+// GoString は、固定の文字列を返す（%#v）。
+func (Client) GoString() string { return redactedClient }
+
+// Format は、どの書式動詞でも、固定の文字列だけを書く。
+func (Client) Format(f fmt.State, _ rune) { _, _ = io.WriteString(f, redactedClient) }
+
+// LogValue は、log/slog へ、固定の文字列を渡す。
+func (Client) LogValue() slog.Value { return slog.StringValue(redactedClient) }
+
 // normalizeBaseURL は、接続先を「スキーム://ホスト[:ポート]」にそろえる。
 func normalizeBaseURL(raw string) (string, error) {
 	parsed, err := url.Parse(raw)
@@ -222,9 +244,17 @@ func (c *Client) Provision(ctx context.Context, broadcastID string, epoch int, p
 }
 
 // Heartbeat は、心拍（POST /internal/v1/broadcasts/:id/heartbeat）。応答を得られなかった心拍は、同じ Seq・同じ内容で再送する（冪等）。
+// 引数が不正なら、要求を送らずに ErrInvalidArgument（世代が決まる前の世代 0 の心拍は、アプリケーションに古い世代と受け取られ、
+// 取り込みセッションを止めかねない）。
 func (c *Client) Heartbeat(ctx context.Context, broadcastID string, request HeartbeatRequest) (HeartbeatResponse, error) {
 	if !isUUID(broadcastID) {
 		return HeartbeatResponse{}, invalidArgument("heartbeat: broadcast id is not a UUID")
+	}
+	if request.Epoch < 1 {
+		return HeartbeatResponse{}, invalidArgument("heartbeat: epoch is not positive")
+	}
+	if request.Seq < 1 {
+		return HeartbeatResponse{}, invalidArgument("heartbeat: seq is not positive")
 	}
 	var wire heartbeatWire
 	err := c.post(ctx, call{kind: contract.InternalCallHeartbeat, path: pathBcasts + broadcastID + suffixBeat, timeout: c.timeouts.Heartbeat, success: statusOK},
@@ -261,7 +291,8 @@ func statusOK(status int) bool { return status == http.StatusOK }
 
 func status2xx(status int) bool { return status >= 200 && status < 300 }
 
-// post は、JSON の要求を送り、成功なら応答を out へ読む（out が nil なら、本文は読まない）。失敗は、型付きのエラー。
+// post は、JSON の要求を送り、成功なら応答を out へ読む（out が nil なら、本文は解釈しない）。失敗は、型付きのエラー。
+// 本文を最後まで読めなかった応答（途中で切れた、など）は、成功・失敗の別によらず、届かなかったものとして ErrUnavailable。
 func (c *Client) post(ctx context.Context, spec call, requestBody any, out any) error {
 	payload, err := json.Marshal(requestBody)
 	if err != nil {
@@ -283,7 +314,11 @@ func (c *Client) post(ctx context.Context, spec call, requestBody any, out any) 
 	}
 	defer response.Body.Close()
 
-	body, tooLarge := readLimited(response.Body)
+	body, tooLarge, readErr := readLimited(response.Body)
+	if readErr != nil {
+		// 約束した長さの途中で切れた、など。欠けた本文を解釈せず、応答が届かなかったものとして扱う（再送の対象）
+		return transportError(spec, ctx, callCtx, readErr)
+	}
 	if !spec.success(response.StatusCode) {
 		return apiError(spec.kind, response.StatusCode, body, tooLarge)
 	}
@@ -299,14 +334,18 @@ func (c *Client) post(ctx context.Context, spec call, requestBody any, out any) 
 	return nil
 }
 
-// readLimited は、本文を maxResponseBytes まで読む。超えていたら、tooLarge。読み残しは捨てる（接続を再利用するため）。
-func readLimited(body io.Reader) (data []byte, tooLarge bool) {
-	data, _ = io.ReadAll(io.LimitReader(body, maxResponseBytes+1))
+// readLimited は、本文を maxResponseBytes まで読む。超えていたら、tooLarge。読み取りに失敗したら、そのエラー（読んだ分は返さない）。
+// 超過の場合の読み残しは、接続を再利用するために捨てる（その読み捨ての失敗は、結果（tooLarge）を変えないので、見ない）。
+func readLimited(body io.Reader) (data []byte, tooLarge bool, err error) {
+	data, err = io.ReadAll(io.LimitReader(body, maxResponseBytes+1))
+	if err != nil {
+		return nil, false, err
+	}
 	if len(data) > maxResponseBytes {
 		_, _ = io.Copy(io.Discard, io.LimitReader(body, maxResponseBytes))
-		return nil, true
+		return nil, true, nil
 	}
-	return data, false
+	return data, false, nil
 }
 
 // transportError は、通信の失敗を分類する。呼び出し側の取り消し・期限は、そのまま（再送の対象にしない）。

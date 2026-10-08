@@ -15,7 +15,8 @@ package session
 //   - リダイレクトを追わない・プロキシを使わない（backend）：http.DefaultClient・http.Get などを使わず、ErrUseLastResponse を持つ
 //   - グローバル変数を持たない（パッケージレベルの var と init が無い）
 //   - 利用者に表示する文字列を直書きしない（文字列リテラルに日本語などの非 ASCII を含めない）
-//   - 取り込みセッションの構造体を、書式化しても配信キーが出ない（Format を持つ）こと
+//   - 機密を非公開の欄に持つ構造体（取り込みセッション・内部通信クライアント）を、書式化しても機密が出ない（Format・String・GoString を持つ）こと。
+//     fmt は、非公開の欄の型のメソッドを呼ばないため、構造体自身が握らないと、%+v・log.Printf・slog.Any で中身が出る
 //
 // 走査器そのものが、違反を見逃さないこと（空振りでないこと）も、メモリ上のソースで確かめる。
 
@@ -403,6 +404,232 @@ func TestScannerCountsRevealCalls(t *testing.T) {
 	source := "package p\ntype k string\nfunc (k) reveal() string { return \"\" }\nfunc f(x k) (string, string) { return x.reveal(), x.reveal() }\n"
 	if got := scanSource(t, backendRules(), "client.go", source).revealCalls; got != 2 {
 		t.Fatalf("revealCalls = %d, want 2", got)
+	}
+}
+
+// ---- 機密を持つ構造体の整形 ----
+//
+// fmt は、非公開の欄のメソッドを呼ばない。欄の型（Secret・Ticket・IngestURL・StreamKey）が、伏せる実装を持っていても、
+// その欄を持つ構造体が Format を持たないと、%+v・%#v・log.Printf・slog.Any で、中身の文字列がそのまま出る。
+// 公開の欄は、fmt が欄の型のメソッドを呼ぶので、この規則の対象外（欄の型が伏せる）。
+
+// secretTypeNames は、中身が機密の型の名前（パッケージの修飾は外して比べる）。
+func secretTypeNames() []string { return []string{"Secret", "Ticket", "IngestURL", "StreamKey"} }
+
+// formatterMethods は、機密を非公開の欄に持つ構造体が、持つべき整形のメソッド（受け手は、値でもポインタでもよい）。
+func formatterMethods() []string { return []string{"Format", "String", "GoString"} }
+
+// typeFacts は、パッケージのソースから集めた、構造体の欄とメソッド。
+type typeFacts struct {
+	// structs は、構造体の型の名前。
+	structs map[string]bool
+	// secretFields は、機密を非公開の欄に持つ構造体（型の名前）→ その欄の名前。
+	secretFields map[string][]string
+	// methods は、型の名前 → メソッドの名前（受け手が値でもポインタでも）。
+	methods map[string]map[string]bool
+}
+
+// baseTypeName は、型の式から、中心になる型の名前を取り出す（*T・[]T・map[K]T・pkg.T・T[X] の T）。
+func baseTypeName(expr ast.Expr) string {
+	switch typed := expr.(type) {
+	case *ast.Ident:
+		return typed.Name
+	case *ast.StarExpr:
+		return baseTypeName(typed.X)
+	case *ast.ParenExpr:
+		return baseTypeName(typed.X)
+	case *ast.ArrayType:
+		return baseTypeName(typed.Elt)
+	case *ast.MapType:
+		return baseTypeName(typed.Value)
+	case *ast.SelectorExpr:
+		return typed.Sel.Name
+	case *ast.IndexExpr:
+		return baseTypeName(typed.X)
+	case *ast.IndexListExpr:
+		return baseTypeName(typed.X)
+	}
+	return ""
+}
+
+func collectTypeFacts(files []*ast.File) typeFacts {
+	facts := typeFacts{structs: map[string]bool{}, secretFields: map[string][]string{}, methods: map[string]map[string]bool{}}
+	for _, file := range files {
+		for _, declaration := range file.Decls {
+			switch typed := declaration.(type) {
+			case *ast.GenDecl:
+				if typed.Tok != token.TYPE {
+					continue
+				}
+				for _, spec := range typed.Specs {
+					typeSpec := spec.(*ast.TypeSpec)
+					structType, isStruct := typeSpec.Type.(*ast.StructType)
+					if !isStruct {
+						continue
+					}
+					facts.structs[typeSpec.Name.Name] = true
+					for _, field := range structType.Fields.List {
+						typeName := baseTypeName(field.Type)
+						names := []string{typeName} // 型名だけの欄（埋め込み）は、型の名前が欄の名前
+						if len(field.Names) > 0 {
+							names = names[:0]
+							for _, name := range field.Names {
+								names = append(names, name.Name)
+							}
+						}
+						for _, name := range names {
+							if ast.IsExported(name) {
+								continue
+							}
+							if contains(secretTypeNames(), typeName) || contains(secretNames(), name) {
+								facts.secretFields[typeSpec.Name.Name] = append(facts.secretFields[typeSpec.Name.Name], name)
+							}
+						}
+					}
+				}
+			case *ast.FuncDecl:
+				if typed.Recv == nil || len(typed.Recv.List) == 0 {
+					continue
+				}
+				receiver := baseTypeName(typed.Recv.List[0].Type)
+				if facts.methods[receiver] == nil {
+					facts.methods[receiver] = map[string]bool{}
+				}
+				facts.methods[receiver][typed.Name.Name] = true
+			}
+		}
+	}
+	return facts
+}
+
+// missingMethods は、型 name が持たない、want のメソッド。
+func (f typeFacts) missingMethods(name string, want []string) []string {
+	var missing []string
+	for _, method := range want {
+		if !f.methods[name][method] {
+			missing = append(missing, method)
+		}
+	}
+	return missing
+}
+
+// unprotectedSecretHolders は、機密を非公開の欄に持つ構造体のうち、整形のメソッドが足りないものを返す（"型: 足りないメソッド"）。
+func (f typeFacts) unprotectedSecretHolders() []string {
+	var problems []string
+	for name, fields := range f.secretFields {
+		if missing := f.missingMethods(name, formatterMethods()); len(missing) > 0 {
+			problems = append(problems, fmt.Sprintf("%s (secret fields %v): no %s", name, fields, strings.Join(missing, ", ")))
+		}
+	}
+	sort.Strings(problems)
+	return problems
+}
+
+// missingRequired は、持つべき整形のメソッドを持たない、または見つからない型を返す。
+// 走査の抜けで（型の名前の変更などで）、検査が黙って空振りにならないための、名指しの一覧。
+func (f typeFacts) missingRequired(required map[string][]string) []string {
+	var problems []string
+	for name, methods := range required {
+		if !f.structs[name] {
+			problems = append(problems, fmt.Sprintf("%s: the struct was not found (the required formatting guard cannot be checked)", name))
+			continue
+		}
+		if missing := f.missingMethods(name, methods); len(missing) > 0 {
+			problems = append(problems, fmt.Sprintf("%s: no %s", name, strings.Join(missing, ", ")))
+		}
+	}
+	sort.Strings(problems)
+	return problems
+}
+
+func parseNonTestSources(t *testing.T, dir string) []*ast.File {
+	t.Helper()
+	fset := token.NewFileSet()
+	var files []*ast.File
+	for _, name := range nonTestSources(t, dir) {
+		parsed, err := parser.ParseFile(fset, name, nil, 0)
+		if err != nil {
+			t.Fatalf("cannot parse %s: %v", name, err)
+		}
+		files = append(files, parsed)
+	}
+	return files
+}
+
+func parseFactsSource(t *testing.T, source string) typeFacts {
+	t.Helper()
+	parsed, err := parser.ParseFile(token.NewFileSet(), "x.go", source, 0)
+	if err != nil {
+		t.Fatalf("cannot parse the sample source: %v", err)
+	}
+	return collectTypeFacts([]*ast.File{parsed})
+}
+
+// 機密を非公開の欄に持つ構造体が、整形のメソッドを持つこと。取り込みセッション・台帳・接続・内部通信クライアントは、名指しでも確かめる。
+func TestStructsHoldingSecretsDefineFormatters(t *testing.T) {
+	guard := []string{"Format", "String", "GoString"}
+	packages := []struct {
+		name     string
+		dir      string
+		required map[string][]string
+	}{
+		{"session", packageDir(t), map[string][]string{"IngestSession": guard, "Registry": guard, "Connection": guard}},
+		// Client は、共有の秘密値を非公開の欄に持つ。値レシーバで、Client の値でも *Client でも効く。slog には LogValue で伏せた値を渡す
+		{"backend", filepath.Join(packageDir(t), "..", "backend"), map[string][]string{"Client": append([]string{"LogValue"}, guard...)}},
+	}
+	for _, pkg := range packages {
+		t.Run(pkg.name, func(t *testing.T) {
+			facts := collectTypeFacts(parseNonTestSources(t, pkg.dir))
+			if len(facts.structs) == 0 {
+				t.Fatal("no struct was found; the check would pass vacuously")
+			}
+			for _, problem := range facts.unprotectedSecretHolders() {
+				t.Errorf("a struct holds a secret in a non-exported field but cannot be formatted safely: %s", problem)
+			}
+			for _, problem := range facts.missingRequired(pkg.required) {
+				t.Errorf("%s", problem)
+			}
+		})
+	}
+}
+
+// 走査器が、整形のメソッドの無い構造体を見逃さず、そうでないものを誤検知しないこと。
+func TestFormatterScannerFindsUnprotectedStructs(t *testing.T) {
+	const methods = "\nfunc (c %[1]sc) Format(f fmt.State, r rune) {}\nfunc (c %[1]sc) String() string { return \"\" }\nfunc (c %[1]sc) GoString() string { return \"\" }\n"
+	withAll := func(receiver string) string { return fmt.Sprintf(methods, receiver) }
+	cases := []struct {
+		name   string
+		source string
+		want   int // 見つかる構造体の数
+	}{
+		{"機密の型の非公開の欄で、メソッドなし", "package p\ntype c struct{ secret Secret }\n", 1},
+		{"他のパッケージの機密の型", "package p\ntype c struct{ k rtmps.StreamKey }\n", 1},
+		{"機密の型のスライス", "package p\ntype c struct{ tickets []backend.Ticket }\n", 1},
+		{"名前が機密（型は string）", "package p\ntype c struct{ key string }\n", 1},
+		{"値レシーバで 3 つとも持つ", "package p\ntype c struct{ secret Secret }" + withAll(""), 0},
+		{"ポインタレシーバで 3 つとも持つ", "package p\ntype c struct{ secret Secret }" + withAll("*"), 0},
+		{"Format だけ", "package p\ntype c struct{ secret Secret }\nfunc (c c) Format(f fmt.State, r rune) {}\n", 1},
+		{"公開の欄は対象外（欄の型が伏せる）", "package p\ntype c struct{ Secret Secret }\n", 0},
+		{"機密と無関係な欄", "package p\ntype c struct{ n int; name string }\n", 0},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := parseFactsSource(t, c.source).unprotectedSecretHolders()
+			if len(got) != c.want {
+				t.Fatalf("unprotected = %v, want %d", got, c.want)
+			}
+		})
+	}
+
+	facts := parseFactsSource(t, "package p\ntype c struct{ secret Secret }\nfunc (c c) Format(f fmt.State, r rune) {}\n")
+	if got := facts.missingRequired(map[string][]string{"c": {"Format"}}); len(got) != 0 {
+		t.Fatalf("missingRequired = %v, want none", got)
+	}
+	if got := facts.missingRequired(map[string][]string{"c": {"Format", "LogValue"}}); len(got) != 1 {
+		t.Fatalf("missingRequired = %v, want the missing LogValue to be reported", got)
+	}
+	if got := facts.missingRequired(map[string][]string{"gone": {"Format"}}); len(got) != 1 {
+		t.Fatalf("missingRequired = %v, want the missing struct to be reported", got)
 	}
 }
 

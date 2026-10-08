@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -391,6 +392,91 @@ func TestTheBanListIsBounded(t *testing.T) {
 		if want := i > 0; banned != want {
 			t.Fatalf("broadcast %d: banned = %v, want %v (the oldest record is evicted when the list is full)", i, banned, want)
 		}
+	}
+}
+
+// 受信量の超過で切っている最中（切断が終わらない間）にも、当該配信への再接続は受け付けない。
+// 禁止は、閉じる手順に入った時点で成立する（取り込みセッションが完全に終わるのを待たない）。
+func TestAReconnectionWhileAnExcessiveSessionIsStillClosingIsRefused(t *testing.T) {
+	h := newHarness(t)
+	s := h.bringUp("t1", idA, 1)
+	s.conn.audio(0, audioPayload(1, 20))
+	h.settle()
+	release := s.pub.holdAbort() // 切断（Abort）が戻らない間、取り込みセッションは完全には終わらない
+	var releaseOnce sync.Once
+	letGo := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(letGo)
+
+	floodMessages(s.conn)
+	eventually(t, "the session to start disconnecting", func() bool { _, aborts := s.pub.counts(); return aborts > 0 })
+	select {
+	case <-s.sess.Done():
+		t.Fatal("the session finished although the disconnection is held; the closing window would not be exercised")
+	default:
+	}
+
+	h.be.addTicket("t2", verifyResult(idA, 2, contract.BroadcastStateLive))
+	again := h.connect()
+	again.hello("t2")
+	eventually(t, "the reconnection to be refused while the old session is still closing", func() bool { return again.link.isClosed() })
+	expectSequence(t, again.link, "fatal:bitrate_exceeded", "close:1000")
+
+	letGo()
+	h.waitDone(s.sess)
+	h.settle()
+	if h.reg.Count() != 0 {
+		t.Fatalf("Count = %d: a session was made for a banned broadcast", h.reg.Count())
+	}
+	if got := h.fac.openCount(); got != 1 {
+		t.Fatalf("RTMPS connections = %d, want only the original one", got)
+	}
+}
+
+// attachIsWaitingForASession は、照合に成功した接続の受け付け（Registry.attach）が、閉じている最中の取り込みセッションの
+// 終了を待っている最中か（ゴルーチンのスタックで見る。台帳の内部に、試験のための印を置かない）。
+func attachIsWaitingForASession() bool {
+	for _, block := range goroutineBlocks() {
+		header, _, _ := strings.Cut(block, "\n")
+		if strings.Contains(header, "[chan receive") && strings.Contains(block, "session.(*Registry).attach") &&
+			!strings.Contains(block, "session.(*Registry).CloseOthers") {
+			return true
+		}
+	}
+	return false
+}
+
+// 閉じている最中の取り込みセッションに当たって、その終了を待つ間に、当該配信が禁止された場合も、
+// 待ったあとに作り直さずに、受け付けない（再試行の各回で、禁止を見直す）。
+func TestARetryAfterAClosingSessionChecksTheBanAgain(t *testing.T) {
+	h := newHarness(t)
+	s := h.bringUp("t1", idA, 1)
+	release := s.pub.holdAbort()
+	var releaseOnce sync.Once
+	letGo := func() { releaseOnce.Do(func() { close(release) }) }
+	t.Cleanup(letGo)
+	s.sess.Close(CloseReasonSuperseded) // 禁止の理由ではない閉じ方（切断が終わらないので、完全には終わらない）
+	eventually(t, "the session to start disconnecting", func() bool { _, aborts := s.pub.counts(); return aborts > 0 })
+
+	h.be.addTicket("t2", verifyResult(idA, 2, contract.BroadcastStateLive))
+	again := h.connect()
+	again.hello("t2")
+	eventually(t, "the reconnection to wait for the closing session", attachIsWaitingForASession)
+	if again.link.isClosed() {
+		t.Fatalf("the reconnection was answered before the old session finished: %v", again.link.sequence(t))
+	}
+
+	// 待っている間に、当該配信が禁止された（受信量の超過の切断が、別の経路で成立した、など）
+	h.reg.mu.Lock()
+	h.reg.banLocked(idA)
+	h.reg.mu.Unlock()
+
+	letGo()
+	h.waitDone(s.sess)
+	eventually(t, "the waiting reconnection to be refused", func() bool { return again.link.isClosed() })
+	expectSequence(t, again.link, "fatal:bitrate_exceeded", "close:1000")
+	h.settle()
+	if h.reg.Count() != 0 {
+		t.Fatalf("Count = %d: a session was made for a banned broadcast after the wait", h.reg.Count())
 	}
 }
 

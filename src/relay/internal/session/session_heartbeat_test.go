@@ -54,6 +54,54 @@ func TestHeartbeatIsSentEveryTwoSeconds(t *testing.T) {
 	}
 }
 
+// 送出世代が決まる前（照合の結果を得る前）の取り込みセッションは、心拍を送らない。世代 0 の心拍は、アプリケーションに古い世代と
+// 受け取られ、stale_epoch の停止の指示で、取り込みセッションを止めかねない。拍の時刻は進み、連番は使わない。
+// 世代が決まったあとの最初の心拍は、その世代・連番 1 で送る。
+func TestNoHeartbeatIsSentBeforeTheEpochIsKnown(t *testing.T) {
+	h := newHarness(t)
+	s := h.newSession(idA, accountX) // 台帳を通さずに作った。照合の結果で送出世代が決まるまで、世代は無い
+	if err := h.reg.Register(s); err != nil {
+		t.Fatalf("Register: %v", err)
+	}
+	h.advance(10 * time.Second) // 拍が 5 回来る
+	if got := h.be.heartbeats(); len(got) != 0 {
+		t.Fatalf("%d heartbeats were sent before the epoch was known: %+v", len(got), got)
+	}
+
+	h.be.addTicket("t1", verifyResult(idA, 3, contract.BroadcastStateReserved))
+	conn := h.connect()
+	conn.hello("t1")
+	h.settle()
+	expectSequence(t, conn.link, "accepted")
+	h.advance(2 * time.Second)
+
+	beats := h.be.heartbeats()
+	if len(beats) != 1 {
+		t.Fatalf("heartbeats = %d, want 1 (the first beat after the epoch is known)", len(beats))
+	}
+	if beats[0].Epoch != 3 || beats[0].Seq != 1 {
+		t.Fatalf("first heartbeat = epoch %d seq %d, want epoch 3 seq 1 (the sequence number is not used up before the epoch is known)", beats[0].Epoch, beats[0].Seq)
+	}
+}
+
+// どの心拍も、1 以上の世代で送る（照合の結果の世代を得たあとの心拍は、すべて）。
+func TestEveryHeartbeatCarriesAPositiveEpoch(t *testing.T) {
+	h := newHarness(t)
+	s := h.bringUp("t1", idA, 5)
+	s.conn.conn.Disconnected()
+	h.settle()
+	h.advance(20 * time.Second)
+	beats := h.be.heartbeats()
+	if len(beats) == 0 {
+		t.Fatal("no heartbeat was sent")
+	}
+	for i, beat := range beats {
+		if beat.Epoch != 5 || beat.Seq != i+1 {
+			t.Fatalf("heartbeat %d = epoch %d seq %d, want epoch 5 seq %d", i, beat.Epoch, beat.Seq, i+1)
+		}
+	}
+}
+
 func TestHeartbeatCarriesThePublishingFlagAndTheSentBytes(t *testing.T) {
 	h := newHarness(t)
 	s := h.bringUp("t1", idA, 1)

@@ -132,6 +132,18 @@ func (h *harness) settle() {
 	}
 }
 
+// eventually は、条件が成り立つのを待つ（実時間で最大 5 秒。ゴルーチンの進行を待つだけで、時計の待機ではない）。
+func eventually(t testing.TB, what string, condition func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for !condition() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for: %s", what)
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
 // advance は、時計を d 進める。心拍の拍（2 秒）を飛ばさないよう、2 秒ずつ進めて、そのたびに作業の終わりを待つ
 // （実際の中継は、2 秒ごとに心拍を送り、応答を受ける。長い時間を一度に進めると、60 秒の応答の喪失が、誤って成立する）。
 func (h *harness) advance(d time.Duration) {

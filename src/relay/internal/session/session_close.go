@@ -101,6 +101,13 @@ func (s *IngestSession) closeWith(plan closePlan) {
 	s.src = nil
 	s.setPhase(phaseClosed)
 	s.log.Info("closing the ingest session", slog.String("reason", plan.reason), slog.Bool("abort", plan.abort))
+	if plan.ban {
+		// 禁止は、閉じる手順に入った時点で成立させる。RTMPS の切断が終わらない間（完了まで時間がかかり得る）に来た再接続を、
+		// 受け付けないため。終わったあと、台帳から外すときにも記録する（登録が、あとになった場合のため）
+		if registry := s.registryRef.Load(); registry != nil {
+			registry.ban(s.id)
+		}
+	}
 	if src != nil {
 		if plan.status != nil {
 			s.sendRaw(src, s.encoded(encodeStatus(s.withWatchURL(*plan.status))))

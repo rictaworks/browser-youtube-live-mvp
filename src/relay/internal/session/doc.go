@@ -25,7 +25,7 @@
 //	registry, _ := session.NewRegistry(session.Deps{
 //		Backend: client, Events: events,
 //		Publishers: session.NewRTMPSFactory(policy, rtmps.Config{}),
-//		Clock:      session.SystemClock{}, Logger: logger,
+//		Clock:      session.SystemClock{}, Logger: logger, // Logger は必須（nil は ErrInvalidDeps。捨ててよいときも、捨てる出力先を明示して渡す）
 //	})
 //	conn, _ := registry.Accept(link) // WebSocket の接続ごとに。link は BrowserLink を満たす
 //	conn.Handle(message)             // バイナリのメッセージごとに（所有は接続に移る）

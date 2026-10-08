@@ -9,11 +9,12 @@
 #   4. 繰り返しと並列度の変更（-race -count=3 -cpu 1,4。時計の注入による決定性・ゴルーチンの残りが無いことの確認）
 #   5. 中継の全パッケージ（-race -count=1 ./...。#18・#19 など、既存の部品が壊れていないこと）
 #   6. 受け入れ条件に対応するテストが、すべて実行され、成功したこと（テストの名前の変更・スキップで、黙って検査されなくならない）
-#   7. ソースの走査（絵文字・削除系・変更の範囲）と、走査器の自己検査
+#   7. ソースの走査（絵文字・削除系・変更の範囲）と、走査器の自己検査。変更の範囲は、PR のブランチのコミット済みの内容を、
+#      比較の基準（既定 origin/main。環境変数 PR_BASE_REF で変える）と比べる。作業ツリーの未コミットの変更（他の issue の作業）は見ない
 #
 # 使い方: このファイルを実行する（リポジトリのどこからでもよい。場所は、このファイル自身から解決する）
 #   事前に scripts/setup_dev_env.sh で .env を作る
-# 終了コード: 0 = すべて成功 / 1 = 失敗がある / 2 = 前提の不足
+# 終了コード: 0 = すべて成功 / 1 = 失敗がある / 2 = 前提の不足（.env が無い、など）
 # ハーネスの安全（.claude/TEST-HARNESS-SAFETY.md）: 自己再帰ガード（TH1）・ulimit -u と各手順の timeout（TH3）。ファイルは作るだけで、消さない。
 set -uo pipefail
 
@@ -83,7 +84,7 @@ run_capture "取り込みセッション・内部通信クライアントのテ�
 run "受け入れ条件に対応するテストが、すべて成功している" python3 -I "$HERE/check_acceptance_tests.py" "$TMP_DIR/all.txt"
 
 run "走査器の自己検査" python3 -I "$HERE/scan_sources.py" --self-test
-run "ソースの走査（絵文字・削除系・変更の範囲）" python3 -I "$HERE/scan_sources.py" "$ROOT_DIR"
+run "ソースの走査（絵文字・削除系・変更の範囲）" python3 -I "$HERE/scan_sources.py" "$ROOT_DIR" "${PR_BASE_REF:-origin/main}"
 
 printf '\n######## 結果（PR #49）\n'
 printf '%s\n' "${results[@]}"

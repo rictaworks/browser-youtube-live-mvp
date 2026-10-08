@@ -176,24 +176,27 @@ func unavailable() error { return fmt.Errorf("%w: test", ErrUnavailable) }
 
 func TestNewEventQueueChecksItsArguments(t *testing.T) {
 	sender, waiter := newFakeSender(), &fakeWaiter{auto: true}
+	discard := slog.New(slog.DiscardHandler) // 捨てる出力先は、明示して渡す（nil は、本番の結線の抜けとして拒否する）
 	cases := []struct {
 		name    string
 		sender  EventSender
 		waiter  Waiter
 		opts    QueueOptions
+		log     *slog.Logger
 		wantErr bool
 	}{
-		{"既定値", sender, waiter, QueueOptions{}, false},
-		{"送り先が無い", nil, waiter, QueueOptions{}, true},
-		{"待機が無い", sender, nil, QueueOptions{}, true},
-		{"上限が負", sender, waiter, QueueOptions{MaxEvents: -1}, true},
-		{"最初の待機が負", sender, waiter, QueueOptions{InitialBackoff: -time.Second}, true},
-		{"待機の上限が負", sender, waiter, QueueOptions{MaxBackoff: -time.Second}, true},
-		{"待機の上限が最初より小さい", sender, waiter, QueueOptions{InitialBackoff: 2 * time.Second, MaxBackoff: time.Second}, true},
+		{"既定値", sender, waiter, QueueOptions{}, discard, false},
+		{"送り先が無い", nil, waiter, QueueOptions{}, discard, true},
+		{"待機が無い", sender, nil, QueueOptions{}, discard, true},
+		{"ログの出力先が無い", sender, waiter, QueueOptions{}, nil, true},
+		{"上限が負", sender, waiter, QueueOptions{MaxEvents: -1}, discard, true},
+		{"最初の待機が負", sender, waiter, QueueOptions{InitialBackoff: -time.Second}, discard, true},
+		{"待機の上限が負", sender, waiter, QueueOptions{MaxBackoff: -time.Second}, discard, true},
+		{"待機の上限が最初より小さい", sender, waiter, QueueOptions{InitialBackoff: 2 * time.Second, MaxBackoff: time.Second}, discard, true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			_, err := NewEventQueue(c.sender, c.waiter, c.opts, nil)
+			_, err := NewEventQueue(c.sender, c.waiter, c.opts, c.log)
 			if c.wantErr != (err != nil) {
 				t.Fatalf("error = %v, wantErr %v", err, c.wantErr)
 			}

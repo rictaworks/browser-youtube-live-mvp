@@ -17,10 +17,12 @@ test/pr49/run_all.sh
 | `-race -count=3 -cpu 1,4` | 繰り返しと並列度の変更でも、結果が変わらない（時計の注入による決定性。ゴルーチンが残らない） |
 | `scripts/test_relay.sh -race -count=1`（全体） | #18（Domain Core）・#19（FLV 多重化・RTMPS 送出）など、既存の部品が壊れていない |
 | `check_acceptance_tests.py` | 受け入れ条件に対応するテスト（名前）が、すべて実行され、成功している（名前の変更・スキップで、黙って検査されなくならない） |
-| `scan_sources.py --self-test` | 走査器そのものが、違反を見逃さず、違反でないものを誤検知しない |
-| `scan_sources.py` | 対象のファイルがそろっている。絵文字・削除系の記述が無い。`src/relay` の変更が `internal/session`・`internal/backend`・`go.mod`・`go.sum` の中だけ（`internal/flv`・`internal/rtmps`・`core` は参照のみ） |
+| `scan_sources.py --self-test` | 走査器そのものが、違反を見逃さず、違反でないものを誤検知しない（変更の範囲の判定は、一時ディレクトリの確認用リポジトリで、未コミットの変更を数えないことまで確かめる） |
+| `scan_sources.py` | 対象のファイルがそろっている。絵文字・削除系の記述が無い。PR のブランチのコミット済みの内容を比較の基準（既定 `origin/main`）と比べて、`src/relay` の変更が `internal/session`・`internal/backend`・`go.mod`・`go.sum` の中だけ（`internal/flv`・`internal/rtmps`・`core` は参照のみ） |
 
-終了コード 0 が成功です（1 = 失敗がある、2 = `.env` が無いなど前提の不足）。
+終了コード 0 が成功です（1 = 失敗がある、2 = `.env` が無い、比較の基準を解決できないなど前提の不足）。
+
+変更の範囲の検査は、作業ツリーの未コミットの変更（他の issue の作業）を見ません。比較の基準は `origin/main` で、古いときは `git fetch origin main` で取得してください。別の基準を使うときは、環境変数 `PR_BASE_REF` で指定します（例：`PR_BASE_REF=origin/main test/pr49/run_all.sh`）。基準を解決できないときは、別の基準へ切り替えずに、エラーで止まります。
 
 Go の構文木による規則（実時計を使わない・入出力に触れない・グローバル変数を持たない・日本語を直書きしない・ログに秘密値とエラーの文言を渡さない・`rtmps.NewPolicy` を本番のコードに置かない・`reveal()` の使用箇所）は、`src/relay/internal/session/rules_test.go` が、`internal/session` と `internal/backend` の両方について検査します。
 
@@ -44,6 +46,16 @@ Go の構文木による規則（実時計を使わない・入出力に触れ�
 | `Decode` → `TimeGuard` → `Rebaser` の結合（復帰・巻き戻りの復帰） | `TestOutputTimestampsNeverGoBackwardAcrossResumesAndClockRestarts`・`TestAudioAndVideoOfTheSameInstantStayInSyncAcrossAResume` |
 | セッション台帳：`Register`・`Find`・`Count`・`CloseOthers`・`Remove`・`SwapSource`・ゴルーチン安全 | `TestRegisterFindCountRemove`・`TestCloseOthersClosesOnlyTheOtherSessionsOfTheAccount`・`TestAHelloOfANewBroadcastClosesTheAccountsOldSessionBeforeAccepting`・`TestANewerConnectionClosesTheOlderOneAtOnce`・`TestRegistryIsSafeForConcurrentUse` |
 | ゴルーチンのリークが無い・ログに秘密値が出ない | 全テストの終了時の検査（`harness_test.go`）・`TestManySessionsRunIndependently`・`TestNoSecretIsLoggedOverAWholeBroadcast` |
+
+## レビュー指摘（PR #49）への対応
+
+| 指摘 | 確かめるテスト |
+|---|---|
+| R1：内部通信クライアント（`backend.Client`）が共有の秘密値を非公開の欄に持ち、`%+v`・`log.Printf`・`slog.Any` で出る | `TestFormattingTheClientNeverExposesTheSharedSecret`（値と `*Client`。`%v %+v %#v %s %q %x %d`・`Sprint`・`log`）・`TestTheClientPrintsOnlyAFixedText`・`TestTheClientDefinesEveryFormattingGuard`・`TestTheClientIsRedactedInStructuredLogs`（`slog` の Text・JSON）・`TestEncodingTheClientNeverExposesTheSharedSecret`・`TestStructsHoldingSecretsDefineFormatters`（機密を非公開の欄に持つ構造体が、整形のメソッドを持つ。ソースの走査）・`TestFormatterScannerFindsUnprotectedStructs` |
+| R2：受信量の超過で切っている最中に、再接続の拒否が破れる | `TestAReconnectionWhileAnExcessiveSessionIsStillClosingIsRefused`（切断を止めた状態で hello を出し、`fatal(bitrate_exceeded)`）・`TestARetryAfterAClosingSessionChecksTheBanAgain`（待っている間に成立した禁止を、再試行で見直す） |
+| R3：世代が決まる前の心拍が、世代 0 で送られ得る | `TestNoHeartbeatIsSentBeforeTheEpochIsKnown`・`TestEveryHeartbeatCarriesAPositiveEpoch`・`TestHeartbeatChecksItsArgumentsBeforeSending`（世代・連番が 1 未満なら、要求を送らず `ErrInvalidArgument`）・`TestHeartbeatAcceptsTheSmallestValidEpochAndSeq` |
+| R7：本文の読み取りの失敗を捨てている。ログの出力先が nil だと黙って捨てる | `TestAResponseBodyThatCannotBeReadToTheEndIsUnavailable`・`TestCancellationWhileReadingTheBodyIsNotUnavailable`・`TestDependenciesAreRequired`（`Deps.Logger`）・`TestNewEventQueueChecksItsArguments`（ログの出力先） |
+| R8：変更の範囲の検査が、作業ツリーの未コミットの変更に依存する | `scan_sources.py --self-test`（確認用リポジトリの 4 件） |
 
 ## 確かめられないこと
 

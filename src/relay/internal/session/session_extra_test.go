@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -62,7 +63,7 @@ func (s *switchableSender) deliveredEvents() []string {
 func TestEventsAreHeldWhileTheApplicationIsUnreachableAndDeliveredInOrderAfterwards(t *testing.T) {
 	h := newHarness(t)
 	sender := &switchableSender{}
-	queue, err := backend.NewEventQueue(sender, clockWaiter{h.clock}, backend.QueueOptions{}, nil)
+	queue, err := backend.NewEventQueue(sender, clockWaiter{h.clock}, backend.QueueOptions{}, slog.New(slog.DiscardHandler))
 	if err != nil {
 		t.Fatalf("NewEventQueue: %v", err)
 	}
@@ -272,7 +273,8 @@ func TestEachConnectionHasItsOwnIngressWindow(t *testing.T) {
 }
 
 func TestDependenciesAreRequired(t *testing.T) {
-	good := Deps{Backend: newFakeBackend(), Events: &fakeEvents{}, Publishers: newFakeFactory(), Clock: newFakeClock()}
+	// 捨てる出力先も、明示して渡す（nil は、本番の結線の抜けとして拒否する。ログが黙って捨てられ、異常に気づけなくなるため）
+	good := Deps{Backend: newFakeBackend(), Events: &fakeEvents{}, Publishers: newFakeFactory(), Clock: newFakeClock(), Logger: slog.New(slog.DiscardHandler)}
 	cases := []struct {
 		name   string
 		mutate func(d *Deps)
@@ -281,6 +283,7 @@ func TestDependenciesAreRequired(t *testing.T) {
 		{"事象の送り先が無い", func(d *Deps) { d.Events = nil }},
 		{"RTMPS の境界が無い", func(d *Deps) { d.Publishers = nil }},
 		{"時計が無い", func(d *Deps) { d.Clock = nil }},
+		{"ログの出力先が無い", func(d *Deps) { d.Logger = nil }},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -294,7 +297,7 @@ func TestDependenciesAreRequired(t *testing.T) {
 			}
 		})
 	}
-	if _, err := NewRegistry(Deps{Backend: good.Backend, Events: good.Events, Publishers: good.Publishers, Clock: good.Clock, Options: Options{HelloTimeout: -1}}); !errors.Is(err, ErrInvalidOptions) {
+	if _, err := NewRegistry(Deps{Backend: good.Backend, Events: good.Events, Publishers: good.Publishers, Clock: good.Clock, Logger: good.Logger, Options: Options{HelloTimeout: -1}}); !errors.Is(err, ErrInvalidOptions) {
 		t.Fatalf("invalid options error = %v", err)
 	}
 	if _, err := NewIngestSession(Params{AccountKey: accountX}, good); !errors.Is(err, ErrInvalidParams) {

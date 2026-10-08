@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -478,6 +479,116 @@ func TestOversizedResponseIsInvalid(t *testing.T) {
 	}
 }
 
+// 約束した長さの途中で切れた応答（接続の切断・アプリケーションの異常）。読み取りの失敗を捨てて、欠けた本文を解釈しない。
+// 応答は届かなかったものとして ErrUnavailable（再送の対象）にする。
+func truncatedBody(status int) func(w http.ResponseWriter, r *http.Request) {
+	return func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(status)
+		_, _ = io.WriteString(w, `{"broadcast_id":"`)
+		w.(http.Flusher).Flush()
+		panic(http.ErrAbortHandler) // 接続を、本文の途中で切る（サーバーは、記録しない）
+	}
+}
+
+func TestAResponseBodyThatCannotBeReadToTheEndIsUnavailable(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		call   string
+	}{
+		{"照合の成功の応答", 200, "verify"},
+		{"準備の成功の応答", 200, "provision"},
+		{"心拍の成功の応答", 200, "heartbeat"},
+		{"事象の成功の応答", 200, "event"},
+		{"照合の 404", 404, "verify"},
+		{"照合の 409", 409, "verify"},
+		{"準備の 409", 409, "provision"},
+		{"照合の 500", 500, "verify"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			app := newFakeApp(t, truncatedBody(c.status))
+			err := invoke(newTestClient(t, app), c.call)
+			if !isError(err, ErrUnavailable) {
+				t.Fatalf("error = %v, want ErrUnavailable", err)
+			}
+			if isError(err, ErrInvalidResponse) {
+				t.Fatalf("the truncated body was interpreted as an invalid response: %v", err)
+			}
+			if strings.Contains(err.Error(), "CANARY") {
+				t.Fatalf("the error leaks a secret: %q", err.Error())
+			}
+		})
+	}
+}
+
+// bodyReadSignal は、応答の本文の読み取りが始まったことを知らせる（試験が、取り消しを、応答の見出しを受けたあとに行うため）。
+type bodyReadSignal struct {
+	base    http.RoundTripper
+	started chan struct{}
+	once    sync.Once
+}
+
+func (b *bodyReadSignal) RoundTrip(req *http.Request) (*http.Response, error) {
+	response, err := b.base.RoundTrip(req)
+	if err != nil {
+		return nil, err
+	}
+	response.Body = &signalingBody{ReadCloser: response.Body, signal: func() { b.once.Do(func() { close(b.started) }) }}
+	return response, nil
+}
+
+type signalingBody struct {
+	io.ReadCloser
+	signal func()
+}
+
+func (b *signalingBody) Read(p []byte) (int, error) {
+	b.signal()
+	return b.ReadCloser.Read(p)
+}
+
+// 本文を読んでいる最中に、呼び出し側が取り消した場合は、ErrUnavailable にしない（再送の対象にしない）。
+func TestCancellationWhileReadingTheBodyIsNotUnavailable(t *testing.T) {
+	release := make(chan struct{})
+	app := newFakeApp(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Length", "1000")
+		w.WriteHeader(200)
+		_, _ = io.WriteString(w, `{"broadcast_id":"`)
+		w.(http.Flusher).Flush()
+		select { // 残りの本文は、送らない
+		case <-release:
+		case <-r.Context().Done():
+		}
+	})
+	t.Cleanup(func() { close(release) })
+	signal := &bodyReadSignal{base: &http.Transport{}, started: make(chan struct{})}
+	client := newTestClient(t, app, func(c *Config) { c.HTTPClient = &http.Client{Transport: signal} })
+	ctx, cancel := context.WithCancel(context.Background())
+	result := make(chan error, 1)
+	go func() {
+		_, err := client.Verify(ctx, Ticket("t"))
+		result <- err
+	}()
+	select {
+	case <-signal.started: // 応答の見出しを受け、本文を読み始めた
+	case <-time.After(5 * time.Second):
+		t.Fatal("the client did not start reading the response body")
+	}
+	cancel()
+	select {
+	case err := <-result:
+		if !isError(err, context.Canceled) || isError(err, ErrUnavailable) {
+			t.Fatalf("error = %v, want context.Canceled and not ErrUnavailable", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the call did not return after the cancellation")
+	}
+}
+
 // ---- 準備 ----
 
 func TestProvisionSendsTheContractRequestAndParsesTheResult(t *testing.T) {
@@ -630,6 +741,46 @@ func TestHeartbeatSendsBrowserEventsAndNullBrowser(t *testing.T) {
 	}
 	assertJSONEqual(t, app.recorded()[1].Body, `{"epoch":2,"seq":2,"publishing":false,"out_kbps":0,"sent_bytes_delta":0,"browser":{"backlog_ms":1800,"dropped_video_frames":12,"target_kbps":3000,"state":"degraded","events":[`+
 		`{"kind":"bitrate_down","detail":{"from_kbps":3300,"to_kbps":3000}},{"kind":"video_dropped","detail":{"frames":12}},{"kind":"degraded_started"}]}}`)
+}
+
+// 世代が決まる前（0）の心拍・連番が 0 以下の心拍は、アプリケーションに古い世代と受け取られて、取り込みセッションを止めかねない。
+// 要求を送らずに、ErrInvalidArgument（準備・事象と同じ）。
+func TestHeartbeatChecksItsArgumentsBeforeSending(t *testing.T) {
+	cases := []struct {
+		name    string
+		id      string
+		request HeartbeatRequest
+	}{
+		{"識別子が UUID ではない", "abc", HeartbeatRequest{Epoch: 1, Seq: 1}},
+		{"識別子にパスの区切り", "../../admin", HeartbeatRequest{Epoch: 1, Seq: 1}},
+		{"世代が 0（世代が決まる前）", sampleBroadcastID, HeartbeatRequest{Epoch: 0, Seq: 1}},
+		{"世代が負", sampleBroadcastID, HeartbeatRequest{Epoch: -1, Seq: 1}},
+		{"連番が 0", sampleBroadcastID, HeartbeatRequest{Epoch: 1, Seq: 0}},
+		{"連番が負", sampleBroadcastID, HeartbeatRequest{Epoch: 1, Seq: -1}},
+		{"世代も連番も 0", sampleBroadcastID, HeartbeatRequest{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			app := newFakeApp(t, reply(200, sampleHeartbeatBody))
+			_, err := newTestClient(t, app).Heartbeat(context.Background(), c.id, c.request)
+			if !isError(err, ErrInvalidArgument) {
+				t.Fatalf("error = %v, want ErrInvalidArgument", err)
+			}
+			if got := len(app.recorded()); got != 0 {
+				t.Fatalf("a request was sent (%d)", got)
+			}
+		})
+	}
+}
+
+func TestHeartbeatAcceptsTheSmallestValidEpochAndSeq(t *testing.T) {
+	app := newFakeApp(t, reply(200, sampleHeartbeatBody))
+	if _, err := newTestClient(t, app).Heartbeat(context.Background(), sampleBroadcastID, HeartbeatRequest{Epoch: 1, Seq: 1}); err != nil {
+		t.Fatalf("Heartbeat: %v", err)
+	}
+	if got := len(app.recorded()); got != 1 {
+		t.Fatalf("requests = %d, want 1", got)
+	}
 }
 
 func TestHeartbeatParsesTheResponse(t *testing.T) {
