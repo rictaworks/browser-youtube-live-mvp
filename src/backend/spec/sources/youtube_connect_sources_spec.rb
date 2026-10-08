@@ -22,7 +22,7 @@ RSpec.describe "YouTube 接続のソース" do
     app/controllers/api/error/broadcast_in_progress.rb app/controllers/api/error/not_connected.rb app/controllers/api/error/unverifiable.rb
     config/initializers/token_encryption_key.rb config/initializers/zeitwerk_inflections.rb config/routes.rb
   ].freeze
-  other_files = %w[ config/external_services.yml app/views/dev/google_connect/consent.html.erb ].freeze
+  other_files = %w[ config/external_services.yml config/youtube_connect.yml app/views/dev/google_connect/consent.html.erb ].freeze
 
   ignored_token_types = %i[ on_comment on_sp on_nl on_ignored_nl on_embdoc_beg on_embdoc on_embdoc_end ]
   japanese = /[\p{Hiragana}\p{Katakana}\p{Han}　-〿＀-￯]/
@@ -77,6 +77,16 @@ RSpec.describe "YouTube 接続のソース" do
 
     it "設定ファイルに、資格情報・トークンの語を書かない" do
       expect(root.join("config/external_services.yml").read).not_to match(/client_secret|client_id|secret_key|password|refresh_token|access_token/i)
+      expect(root.join("config/youtube_connect.yml").read).not_to match(/client_secret|client_id|secret_key|password|refresh_token|access_token/i)
+    end
+
+    it "チャンネル名の失敗を覚える秒数を、コードに直書きしない（config/youtube_connect.yml から読む）" do
+      source = root.join("app/services/channel_name_cache.rb").read(encoding: "UTF-8")
+      config = root.join("config/youtube_connect.yml").read(encoding: "UTF-8")
+
+      expect(source).to include("config_for(CONFIG_NAME)")
+      expect(source).to include("channel_title_failure_cache_seconds")
+      expect(config).to match(/^\s+channel_title_failure_cache_seconds: \d+$/)
     end
 
     it "実時計（Time.now・Time.current・Date.today・Date.current・DateTime.now）を読まない（時刻は引数 now・注入した時計から）" do

@@ -20,11 +20,14 @@ require "digest"
 #                                         保存済みの配信用ストリームの識別子を破棄する（10.5。成立のたびに）。1 つのトランザクション。チャンネル名はメモリに置く
 #                                       不成立: 受け取ったトークンを保存せず破棄する。既存の接続が無い場合に限り、Google 側でも失効させる
 #                                         （既存の接続があるときは、同じ付与を共有するため失効させない）。既存の接続の状態・トークン・ストリームの識別子は変更しない
+#                                       想定外の例外（DB の失敗など）: トークンを受け取ったあと、成立（保存）しないまま例外になったときも、同じく破棄する
+#                                         （更新トークンが、保存も失効もされずに、Google 側に残らない）。保存が済んだあとの例外では、失効させない。例外は握りつぶさず伝える
 #   recheck(user:, now:)                再確認。接続が無ければ not_connected。認可失効は、再確認せず revoked のまま返す。
 #                                       接続済み・ライブ未有効のとき、チャンネルとライブの有効を再確認し、connected と live_not_enabled を更新する。
 #                                       トークンの更新が恒久的に失敗した・権限が不足していれば認可失効にする。確認不能は、状態を変えない
 #   channel_title(user)                 チャンネル名（GET /api/state?with_channel=1）。最長 10 分のメモリのキャッシュ。取得に失敗しても例外にせず nil
-#                                       （失敗を記録する）。状態を変えない
+#                                       （失敗を記録する）。失敗は短時間（config/youtube_connect.yml）だけ覚え、その間は YouTube を呼ばない
+#                                       （障害中の再読み込みが、共通枠を使い切らない）。空・空白だけのチャンネル名も、取得できなかったものとして扱う。状態を変えない
 #   broadcast_in_progress?(user)        進行中の配信（終了していない配信）があるか
 #
 # 確認（probe_channel）の失敗は、型付きの例外の disposition（YouTubeErrors）の接続状態に従って扱う: ライブ未有効・制限中（チャンネルの閉鎖・停止を含む）は
@@ -43,6 +46,9 @@ class YouTubeConnectService
   UNUSED_NONCE = "unused".freeze
   # 利用者が同意画面で拒否・取り消したときに、Google が戻り先に付ける error の値
   DENIED_ERROR = "access_denied".freeze
+  # 空白だけのチャンネル名（全角の空白・改行しない空白を含む Unicode の空白）
+  BLANK_TITLE = /\A[[:space:]]*\z/
+  private_constant :BLANK_TITLE
 
   CR = Contract::ConnectResult
   CS = Contract::YoutubeConnectionState
@@ -59,6 +65,11 @@ class YouTubeConnectService
 
     def to_s
       inspect
+    end
+
+    # pp・pretty_inspect も、同じ表記にする（Data の既定の pretty_print は、メンバーの値を、そのまま出す）
+    def pretty_print(printer)
+      printer.text(inspect)
     end
   end
 
@@ -94,8 +105,18 @@ class YouTubeConnectService
     def to_s
       inspect
     end
+
+    # pp・pretty_inspect も、同じ表記にする（Data の既定の pretty_print は、メンバーの値を、そのまま出す）
+    def pretty_print(printer)
+      printer.text(inspect)
+    end
   end
   private_constant :Verdict
+
+  # 1 回の完了（complete）の途中の印。受け取ったトークンを保存したか。保存したあとは、例外になっても、トークンを失効させない。
+  # 呼び出しごとに作る（サービスの状態にしない。同じサービスを複数のスレッドが使っても、混ざらない）
+  Attempt = Struct.new(:saved)
+  private_constant :Attempt
 
   # 現在の環境（AppEnvironment）の実装で組み立てる（Google は ExternalServices、YouTube は YouTubeServices。開発・テストは疑似、本番は実物）
   def self.current
@@ -145,7 +166,7 @@ class YouTubeConnectService
     return failure(user, CR::UNVERIFIABLE, :broadcast_in_progress) if broadcast_in_progress?(user)
 
     grant = @oidc.exchange_youtube_code(code: code, code_verifier: payload.code_verifier, redirect_uri: redirect_uri)
-    judge(user, grant, now)
+    judge_discarding_unsaved(user, grant, now)
   rescue GoogleOidc::AuthenticationFailed => exchange_failure
     failure(user, CR::UNVERIFIABLE, :"exchange_#{exchange_failure.reason}")
   end
@@ -202,23 +223,34 @@ class YouTubeConnectService
     given.is_a?(String) && ActiveSupport::SecurityUtils.secure_compare(expected, given)
   end
 
+  # 受け取ったトークンは、保存（成立）しない限り、必ず破棄する。不成立の確定も、想定外の例外（DB の失敗など）も、ここの 1 か所で破棄する
+  # （ensure。例外は握りつぶさず、そのまま伝える）。保存が済んだあと（attempt.saved）の例外では、破棄しない（保存した更新トークンを無効にしない）
+  def judge_discarding_unsaved(user, grant, now)
+    attempt = Attempt.new(false)
+    judge(user, grant, now, attempt)
+  ensure
+    discard_grant(user, grant) unless attempt.saved
+  end
+
   # 交換で得た付与を判定する（7.2 の表）。権限 -> 更新トークン -> 接続時の確認の順
-  def judge(user, grant, now)
-    return reject(user, grant, CR::SCOPE_DENIED, :youtube_scope_not_granted) unless grant.scope?(@oidc.youtube_scope)
-    return reject(user, grant, CR::NO_REFRESH_TOKEN, :refresh_token_missing) unless grant.refresh_token?
+  def judge(user, grant, now, attempt)
+    return failure(user, CR::SCOPE_DENIED, :youtube_scope_not_granted) unless grant.scope?(@oidc.youtube_scope)
+    return failure(user, CR::NO_REFRESH_TOKEN, :refresh_token_missing) unless grant.refresh_token?
 
     verdict = verify(nil, grant.access_token)
     case verdict.kind
-    when :connected, :live_not_enabled then establish(user, grant, verdict, now)
-    when :no_channel then reject(user, grant, CR::NO_CHANNEL, verdict.reason)
-    when :revoked then reject(user, grant, CR::SCOPE_DENIED, verdict.reason)
-    else reject(user, grant, CR::UNVERIFIABLE, verdict.reason)
+    when :connected, :live_not_enabled then establish(user, grant, verdict, now, attempt)
+    when :no_channel then failure(user, CR::NO_CHANNEL, verdict.reason)
+    when :revoked then failure(user, CR::SCOPE_DENIED, verdict.reason)
+    else failure(user, CR::UNVERIFIABLE, verdict.reason)
     end
   end
 
-  # 接続の成立。更新トークンの保存・状態・ストリームの識別子の破棄は、1 つのトランザクション。チャンネル名は、確定したあとでメモリに置く
-  def establish(user, grant, verdict, now)
+  # 接続の成立。更新トークンの保存・状態・ストリームの識別子の破棄は、1 つのトランザクション。保存が済んだら印を付ける（以降は、トークンを破棄しない）。
+  # チャンネル名は、確定したあとでメモリに置く
+  def establish(user, grant, verdict, now, attempt)
     persist_connection(user, grant, verdict.kind, now)
+    attempt.saved = true
     remember_channel_title(user, verdict.channel_title)
 
     result = verdict.kind == :connected ? CR::CONNECTED : CR::LIVE_NOT_ENABLED
@@ -242,14 +274,9 @@ class YouTubeConnectService
     kind == :connected ? connection.mark_connected! : connection.mark_live_not_enabled!
   end
 
-  # 不成立。受け取ったトークンを保存しない（破棄する）。既存の接続が無ければ、Google 側でも失効させる
-  def reject(user, grant, result, reason)
-    discard_grant(user, grant)
-    failure(user, result, reason)
-  end
-
+  # 受け取ったトークンを保存しない（破棄する）。既存の接続が無ければ、Google 側でも失効させる。
   # 既存の接続があれば、同じ付与（同じ利用者・同じクライアント）を共有するため、失効させない（既存のトークンも失効してしまう）。
-  # 失効の失敗は、結果を変えない（記録する）。失効は、YouTube API ではなく Google のトークンの失効の口（台帳に記帳しない）
+  # 失効の失敗は、結果（または伝わる例外）を変えない（記録する）。失効は、YouTube API ではなく Google のトークンの失効の口（台帳に記帳しない）
   def discard_grant(user, grant)
     return if YoutubeConnection.owned_by(user).exists?
 
@@ -334,7 +361,17 @@ class YouTubeConnectService
   def verdict_for_probe(probe)
     return Verdict.new(kind: :no_channel, channel_title: nil, reason: :channel_not_found) if probe.no_channel?
 
-    Verdict.new(kind: probe.live_not_enabled? ? :live_not_enabled : :connected, channel_title: probe.channel_title, reason: nil)
+    # 空・空白だけのチャンネル名は、取得できなかったものとして扱う（接続は成立のまま。キャッシュの保持の検査で、例外にしない）
+    usable = usable_title?(probe.channel_title)
+    Verdict.new(
+      kind: probe.live_not_enabled? ? :live_not_enabled : :connected, channel_title: usable ? probe.channel_title : nil,
+      reason: usable ? nil : :channel_title_blank
+    )
+  end
+
+  # 保持してよいチャンネル名か（文字列で、空・空白だけでない。全角の空白などだけのものも除く）
+  def usable_title?(title)
+    title.is_a?(String) && !title.strip.empty? && !title.match?(BLANK_TITLE)
   end
 
   # 窓口は、チャンネルの一覧取得の側の失敗（channelClosed など）を、結果にせず例外のまま伝える。disposition の接続状態に従う

@@ -13,7 +13,8 @@
 #   4. 再接続: 暗号文が置き換わり、保存していた配信用ストリームの識別子が破棄される
 #   5. 不成立（新しいアカウント）: 権限の部分拒否・更新トークンなし・チャンネルなし・確認不能・拒否（error=access_denied）。接続の行を作らない・
 #      Google 側の失効（拒否以外）・測定イベント connect_failed。ライブ未有効の成立 -> 再確認で接続済み。既存の接続があれば、不成立でも変更しない（失効もしない）
-#   6. コールバックの検査: state の不一致・bl_oauth なし・別のアカウントのセッションは unverifiable
+#   6. コールバックの検査: state の不一致・bl_oauth なし・別のアカウントのセッションは unverifiable。測定イベントは、ログイン中のアカウントが開始した接続
+#      （有効な bl_oauth）だけ記録する（匿名・bl_oauth なし・でたらめな要求を何度送っても、行が増えない）
 #   7. 頻度制限: connect/start は同じ IP の 31 回目が 429。再確認はアカウントごと。接続なしは 409 not_connected、認可失効は 200 revoked
 #   8. ログ（log/development.log）に、state・認可コード・bl_oauth の値・セッションの識別子・トークン・チャンネル名・利用者の IP が現れない
 #
@@ -398,6 +399,22 @@ end
 checker.check("ログインしていない（セッションの Cookie が無い）コールバック: JSON の 401 ではなく、302 /account?connect=unverifiable") do
   anonymous = run_callback(nil, valid_flow, bff, cookie_login: nil)
   anonymous.status == 302 && anonymous.headers["location"] == "#{account_url}?connect=unverifiable" && connection_of(carol.user).nil?
+end
+checker.check("測定イベントは、ログイン中のアカウントが開始した接続（有効な bl_oauth）だけ記録する: 匿名・bl_oauth が無い・でたらめな要求を何度送っても、行が増えない") do
+  events_before_noise = UsageEvent.count
+  20.times { run_callback(nil, valid_flow, bff, oauth: nil, cookie_login: nil) }
+  5.times { run_callback(nil, valid_flow, bff, cookie_login: nil) }
+  5.times { run_callback(carol, valid_flow, bff, oauth: nil) }
+  5.times { run_callback(carol, valid_flow, bff, oauth: "garbage") }
+  UsageEvent.count == events_before_noise
+end
+checker.check("開始した接続（有効な bl_oauth）の失敗は、測定イベント connect_failed（符号 unverifiable）を、そのアカウントに 1 件記録する") do
+  failing = begin_connect(carol, bff, "allow")
+  secrets_seen.push(failing[:state], failing[:code], failing[:oauth])
+  failed_before = UsageEvent.where(event_type: "connect_failed", user_id: carol.user.id).count
+  run_callback(carol, failing, bff, path: failing[:callback_path].sub(/state=[^&]+/, "state=dummy-other-state"))
+  UsageEvent.where(event_type: "connect_failed", user_id: carol.user.id).count == failed_before + 1 &&
+    UsageEvent.where(event_type: "connect_failed", user_id: carol.user.id).order(:occurred_at).last.reason_code == "unverifiable"
 end
 checker.check("error=access_denied を直接送る: scope_denied（コードを交換しない）") do
   denied = call(:get, "/api/youtube/connect/callback?error=access_denied&state=#{valid_flow[:state]}", headers: bff, cookie: carol.cookie(oauth: valid_flow[:oauth]))

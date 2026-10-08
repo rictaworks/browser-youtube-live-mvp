@@ -117,17 +117,17 @@ module MutationCatalog
   # 付与の判定（権限 -> 更新トークン -> 接続時の確認）の一部を省く。skip_scope: 権限を見ない / skip_refresh: 更新トークンを見ない
   def self.define_judge(skip_scope: false, skip_refresh: false)
     YouTubeConnectService.class_eval do
-      define_method(:judge) do |user, grant, now|
+      define_method(:judge) do |user, grant, now, attempt|
         result = Contract::ConnectResult
-        return reject(user, grant, result::SCOPE_DENIED, :youtube_scope_not_granted) unless skip_scope || grant.scope?(@oidc.youtube_scope)
-        return reject(user, grant, result::NO_REFRESH_TOKEN, :refresh_token_missing) unless skip_refresh || grant.refresh_token?
+        return failure(user, result::SCOPE_DENIED, :youtube_scope_not_granted) unless skip_scope || grant.scope?(@oidc.youtube_scope)
+        return failure(user, result::NO_REFRESH_TOKEN, :refresh_token_missing) unless skip_refresh || grant.refresh_token?
 
         verdict = verify(nil, grant.access_token)
         case verdict.kind
-        when :connected, :live_not_enabled then establish(user, grant, verdict, now)
-        when :no_channel then reject(user, grant, result::NO_CHANNEL, verdict.reason)
-        when :revoked then reject(user, grant, result::SCOPE_DENIED, verdict.reason)
-        else reject(user, grant, result::UNVERIFIABLE, verdict.reason)
+        when :connected, :live_not_enabled then establish(user, grant, verdict, now, attempt)
+        when :no_channel then failure(user, result::NO_CHANNEL, verdict.reason)
+        when :revoked then failure(user, result::SCOPE_DENIED, verdict.reason)
+        else failure(user, result::UNVERIFIABLE, verdict.reason)
         end
       end
       private :judge
@@ -188,12 +188,14 @@ module MutationCatalog
   # 不成立なのに、受け取った更新トークンを保存する
   def self.mutate_service_failure_stores_token
     YouTubeConnectService.class_eval do
+      alias_method :original_judge_discarding_unsaved, :judge_discarding_unsaved
+      private :original_judge_discarding_unsaved
+
       private
 
-      def reject(user, grant, result, reason)
+      def judge_discarding_unsaved(user, grant, now)
         @vault.store(user_id: user.id, refresh_token: grant.refresh_token, now: Time.current) if grant.refresh_token?
-        discard_grant(user, grant)
-        failure(user, result, reason)
+        original_judge_discarding_unsaved(user, grant, now)
       end
     end
   end
@@ -267,8 +269,8 @@ module MutationCatalog
 
       private
 
-      def judge(user, grant, now)
-        ApplicationRecord.transaction { original_judge(user, grant, now) }
+      def judge(user, grant, now, attempt)
+        ApplicationRecord.transaction { original_judge(user, grant, now, attempt) }
       end
     end
   end
@@ -345,6 +347,49 @@ module MutationCatalog
     end
   end
 
+  # 空・空白だけのチャンネル名を、使えないものとして扱わない（キャッシュの保持の検査で ArgumentError になり、保存したあとに 500 になる）
+  def self.mutate_service_blank_title_unchecked
+    YouTubeConnectService.class_eval do
+      private
+
+      def usable_title?(_title)
+        true
+      end
+    end
+  end
+
+  # 受け取ったトークンの破棄を、想定外の例外のときに行わない（ensure を使わない。不成立の確定のときだけ破棄する）
+  def self.mutate_service_unsaved_token_kept_on_error
+    YouTubeConnectService.class_eval do
+      private
+
+      def judge_discarding_unsaved(user, grant, now)
+        attempt = YouTubeConnectService.const_get(:Attempt).new(false)
+        completion = judge(user, grant, now, attempt)
+        discard_grant(user, grant) unless attempt.saved
+        completion
+      end
+    end
+  end
+
+  # 認可の開始の結果（Start）の pp・pretty_inspect が、Data の既定の表記（state・検証子をそのまま出す）に戻る
+  def self.mutate_service_start_pretty_print_default
+    YouTubeConnectService::Start.class_eval do
+      def pretty_print(printer)
+        Data.instance_method(:pretty_print).bind_call(self, printer)
+      end
+    end
+  end
+
+  # 確認の結果（Verdict）の pp・pretty_inspect が、Data の既定の表記（チャンネル名をそのまま出す）に戻る
+  def self.mutate_service_verdict_pretty_print_default
+    YouTubeConnectService.const_get(:Verdict).class_eval do
+      def pretty_print(printer)
+        Data.instance_method(:pretty_print).bind_call(self, printer)
+      end
+    end
+  end
+
   # ============================================================
   # ChannelNameCache: メモリ保持（最長 10 分・永続化しない・アカウントごと）
   # ============================================================
@@ -354,8 +399,8 @@ module MutationCatalog
     ChannelNameCache.class_eval do
       private
 
-      def read(key)
-        @mutex.synchronize { @entries[key]&.title }
+      def lookup(key)
+        @mutex.synchronize { @entries[key] }
       end
     end
   end
@@ -365,11 +410,11 @@ module MutationCatalog
     ChannelNameCache.class_eval do
       private
 
-      def read(key)
+      def lookup(key)
         @mutex.synchronize do
           entry = @entries[key]
           next nil if entry.nil?
-          next entry.title if current_time <= entry.expires_at
+          next entry if current_time <= entry.expires_at
 
           nil
         end
@@ -377,19 +422,20 @@ module MutationCatalog
     end
   end
 
-  # 読み出しのたびに、寿命が延びる
+  # 読み出しのたびに、寿命が延びる（チャンネル名も、失敗の記録も）
   def self.mutate_cache_read_extends_life
     ChannelNameCache.class_eval do
       private
 
-      def read(key)
+      def lookup(key)
         @mutex.synchronize do
           entry = @entries[key]
           next nil if entry.nil?
           next nil if current_time >= entry.expires_at
 
-          @entries[key] = entry.with(expires_at: current_time + @ttl_seconds)
-          entry.title
+          refreshed = entry.with(expires_at: current_time + (entry.title.nil? ? @failure_ttl_seconds : @ttl_seconds))
+          @entries[key] = refreshed
+          refreshed
         end
       end
     end
@@ -398,9 +444,10 @@ module MutationCatalog
   # 寿命の上限（10 分）を検査しない
   def self.mutate_cache_ttl_max_unchecked
     ChannelNameCache.class_eval do
-      def initialize(clock: SystemClock.method(:now), ttl_seconds: 600)
+      def initialize(clock: SystemClock.method(:now), ttl_seconds: 600, failure_ttl_seconds: 60)
         @clock = clock
         @ttl_seconds = ttl_seconds
+        @failure_ttl_seconds = failure_ttl_seconds
         @entries = {}
         @key_locks = {}
         @mutex = Mutex.new
@@ -428,9 +475,9 @@ module MutationCatalog
 
       private
 
-      def store(key, title)
+      def store(key, title, ttl_seconds)
         Rails.cache.write("channel_title:#{key}", title)
-        original_store(key, title)
+        original_store(key, title, ttl_seconds)
       end
     end
   end
@@ -443,9 +490,9 @@ module MutationCatalog
 
       private
 
-      def store(key, title)
+      def store(key, title, ttl_seconds)
         Rails.logger.info("channel title stored title=#{title}")
-        original_store(key, title)
+        original_store(key, title, ttl_seconds)
       end
     end
   end
@@ -457,10 +504,42 @@ module MutationCatalog
         raise ArgumentError, "a block that fetches the channel title is required" if fetcher.nil?
 
         key = key!(user_id)
-        hit = read(key)
-        return hit if hit
+        known = lookup(key)
+        return known.title if known
 
         fetch_and_store(key, &fetcher)
+      end
+    end
+  end
+
+  # 取得の失敗を覚えない（障害中の再読み込み・チャンネルを削除した利用者の連打が、毎回 YouTube を呼ぶ）
+  def self.mutate_cache_failure_not_cached
+    ChannelNameCache.class_eval do
+      private
+
+      def remember_failure(_key)
+        nil
+      end
+    end
+  end
+
+  # 失敗を覚える時間が、チャンネル名の保持（10 分）と同じ長さになる（設定の 60 秒を使わない）
+  def self.mutate_cache_failure_ttl_too_long
+    ChannelNameCache.class_eval do
+      private
+
+      def remember_failure(key)
+        store(key, nil, @ttl_seconds)
+        nil
+      end
+    end
+  end
+
+  # 保持している 1 件（Entry）の pp・pretty_inspect が、Data の既定の表記（メンバーの値をそのまま出す）に戻る
+  def self.mutate_cache_entry_pretty_print_default
+    ChannelNameCache.const_get(:Entry).class_eval do
+      def pretty_print(printer)
+        Data.instance_method(:pretty_print).bind_call(self, printer)
       end
     end
   end
@@ -613,6 +692,44 @@ module MutationCatalog
 
       def record_connect_event(completion)
         UsageRecorder.record(user_id: current_user&.id, type: Contract::UsageEventType::CONNECT_COMPLETED, reason_code: completion.result)
+      end
+    end
+  end
+
+  # ログインしていない要求（匿名）でも、測定イベントを記録する（Cookie の無い GET で、測定イベントの表を埋められる）
+  def self.mutate_controller_anonymous_event_recorded
+    Api::YoutubeController.class_eval do
+      private
+
+      def started_by_current_user?(_payload)
+        true
+      end
+
+      def record_connect_event(completion)
+        type = completion.success? ? Contract::UsageEventType::CONNECT_COMPLETED : Contract::UsageEventType::CONNECT_FAILED
+        UsageRecorder.record(user_id: current_user&.id, type: type, reason_code: completion.result)
+      end
+    end
+  end
+
+  # ログイン中なら、有効な bl_oauth（開始した接続）が無い要求でも、測定イベントを記録する
+  def self.mutate_controller_event_without_flow
+    Api::YoutubeController.class_eval do
+      private
+
+      def started_by_current_user?(_payload)
+        !current_user.nil?
+      end
+    end
+  end
+
+  # ほかのアカウントの bl_oauth を使った要求でも、測定イベントを記録する
+  def self.mutate_controller_event_account_unchecked
+    Api::YoutubeController.class_eval do
+      private
+
+      def started_by_current_user?(payload)
+        !current_user.nil? && !payload.nil?
       end
     end
   end
@@ -866,6 +983,15 @@ module MutationCatalog
         ExternalServices.current.google_oidc
       end
     end
+  end
+
+  # ============================================================
+  # ログのフィルタ（config/initializers/filter_parameter_logging.rb）
+  # ============================================================
+
+  # login_hint を、ログから除くパラメータの一覧から外す（開発の疑似の同意画面の要求のログに、疑似のアカウントの識別子が出る）
+  def self.mutate_filter_login_hint_missing
+    Rails.application.config.filter_parameters.reject! { |entry| entry == :login_hint }
   end
 end
 

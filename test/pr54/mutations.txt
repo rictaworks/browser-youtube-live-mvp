@@ -23,6 +23,8 @@ key|service_lock_before_store|spec/services/youtube_connect_service_concurrency_
 key|service_disposition_ignored|spec/services/youtube_connect_service_complete_spec.rb spec/services/youtube_connect_service_recheck_spec.rb
 key|service_recheck_probes_revoked|spec/services/youtube_connect_service_recheck_spec.rb spec/requests/api/youtube_recheck_spec.rb
 key|service_channel_title_uncached|spec/services/youtube_connect_service_recheck_spec.rb
+key|service_blank_title_unchecked|spec/services/youtube_connect_service_complete_spec.rb spec/services/youtube_connect_service_recheck_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+key|service_unsaved_token_kept_on_error|spec/services/youtube_connect_service_complete_spec.rb
 # --- ChannelNameCache・RecheckGate・RateLimiter#peek ---
 key|cache_ttl_ignored|spec/services/channel_name_cache_spec.rb
 key|cache_ttl_off_by_one|spec/services/channel_name_cache_spec.rb
@@ -31,6 +33,8 @@ key|cache_uses_rails_cache|spec/services/channel_name_cache_spec.rb
 key|gate_consumes|spec/services/recheck_gate_spec.rb
 key|gate_quota_ignored|spec/services/recheck_gate_spec.rb
 key|peek_consumes|spec/services/rate_limiter_peek_spec.rb spec/services/recheck_gate_spec.rb
+key|cache_failure_not_cached|spec/services/channel_name_cache_spec.rb spec/services/youtube_connect_service_recheck_spec.rb
+key|cache_failure_ttl_too_long|spec/services/channel_name_cache_spec.rb
 # --- Api::YoutubeController ---
 key|controller_rate_limit_skipped|spec/requests/api/youtube_connect_start_spec.rb spec/requests/api/youtube_recheck_spec.rb
 key|controller_bot_skipped|spec/requests/api/youtube_connect_start_spec.rb
@@ -39,6 +43,8 @@ key|controller_start_ignores_broadcast|spec/requests/api/youtube_connect_start_s
 key|controller_oauth_cookie_kept|spec/requests/api/youtube_connect_callback_spec.rb
 key|controller_title_exposed|spec/requests/api/youtube_recheck_spec.rb
 key|controller_callback_redirect_backend_host|spec/requests/api/youtube_connect_callback_spec.rb
+key|controller_anonymous_event_recorded|spec/requests/api/youtube_connect_callback_spec.rb
+key|controller_event_without_flow|spec/requests/api/youtube_connect_callback_spec.rb
 # --- GoogleOidcClient（実物）・FakeGoogleOidc ---
 key|oidc_include_granted_scopes|spec/gateways/google_oidc_client_youtube_spec.rb
 key|oidc_scope_widened|spec/gateways/google_oidc_client_youtube_spec.rb
@@ -47,6 +53,8 @@ key|oidc_secret_not_sent|spec/gateways/google_oidc_client_youtube_spec.rb spec/r
 key|fake_pkce_unchecked|spec/gateways/fake_google_oidc_youtube_spec.rb
 # --- 疑似の同意画面 ---
 key|dev_open_redirect|spec/requests/dev/google_connect_spec.rb
+# --- ログのフィルタ ---
+key|filter_login_hint_missing|spec/config/login_hint_filter_spec.rb spec/requests/dev/google_connect_spec.rb
 # --- 以下は MUTATION_SET=all のときだけ ---
 all|service_code_length_unchecked|spec/services/youtube_connect_service_complete_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
 all|service_revokes_access_token_only|spec/services/youtube_connect_service_complete_spec.rb
@@ -74,3 +82,7 @@ all|dev_consent_unvalidated|spec/requests/dev/google_connect_spec.rb
 all|dev_forbidden_fields_allowed|spec/requests/dev/google_connect_spec.rb
 all|dev_choose_no_injection|spec/requests/dev/google_connect_spec.rb
 all|dev_available_with_real_oidc|spec/requests/dev/google_connect_spec.rb
+all|controller_event_account_unchecked|spec/requests/api/youtube_connect_callback_spec.rb
+all|cache_entry_pretty_print_default|spec/services/channel_name_cache_spec.rb
+all|service_start_pretty_print_default|spec/services/youtube_connect_service_start_spec.rb
+all|service_verdict_pretty_print_default|spec/services/youtube_connect_service_complete_spec.rb

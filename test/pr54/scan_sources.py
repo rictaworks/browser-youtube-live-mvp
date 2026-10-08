@@ -24,7 +24,9 @@ BACKEND = "src/backend"
 # --- 走査の対象（リポジトリのルートからの相対パス） ---
 TARGET_FILES = [
     f"{BACKEND}/config/external_services.yml",
+    f"{BACKEND}/config/youtube_connect.yml",
     f"{BACKEND}/config/routes.rb",
+    f"{BACKEND}/config/initializers/filter_parameter_logging.rb",
     f"{BACKEND}/config/initializers/token_encryption_key.rb",
     f"{BACKEND}/config/initializers/zeitwerk_inflections.rb",
     f"{BACKEND}/app/controllers/api/youtube_controller.rb",
@@ -39,6 +41,7 @@ TARGET_FILES = [
     f"{BACKEND}/app/services/rate_limiter.rb",
     f"{BACKEND}/app/services/recheck_gate.rb",
     f"{BACKEND}/app/services/youtube_connect_service.rb",
+    f"{BACKEND}/spec/config/login_hint_filter_spec.rb",
     f"{BACKEND}/spec/config/token_encryption_key_spec.rb",
     f"{BACKEND}/spec/gateways/external_services_spec.rb",
     f"{BACKEND}/spec/gateways/fake_google_oidc_youtube_spec.rb",

@@ -66,6 +66,13 @@ RSpec.describe "疑似の Google の同意画面（YouTube 接続）", type: :re
       expect(page.css("a").map { |anchor| anchor.text.strip }).to eq(scenarios)
     end
 
+    it "ログに、login_hint（疑似のアカウントの識別子）を出さない（要求の開始の行・Parameters の行）" do
+      output = capture_logs { consent("login_hint" => "dummy-login-hint-must-not-appear") }
+
+      expect(response).to have_http_status(:ok)
+      expect(output).not_to include("dummy-login-hint-must-not-appear")
+    end
+
     it "検索エンジンへ載せない（noindex）。日本語のページ" do
       consent
 
@@ -256,6 +263,12 @@ RSpec.describe "疑似の Google の同意画面（YouTube 接続）", type: :re
       output = capture_logs { choose("allow") }
 
       expect(output).not_to include(redirect_query.fetch("code"))
+    end
+
+    it "ログに、login_hint（疑似のアカウントの識別子）を出さない（要求の開始の行・Parameters の行）" do
+      output = capture_logs { choose("allow", "login_hint" => "dummy-login-hint-must-not-appear") }
+
+      expect(output).not_to include("dummy-login-hint-must-not-appear")
     end
 
     it "POST では呼べない（GET だけ）" do

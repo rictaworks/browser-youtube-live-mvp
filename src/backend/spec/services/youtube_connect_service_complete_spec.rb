@@ -1,4 +1,5 @@
 require "rails_helper"
+require "pp"
 require "support/youtube_connect_support"
 
 # YouTube 接続のコールバックと接続時の確認 YouTubeConnectService#complete（issue #11。requirements.md 7.2・7.3・10.5・23.1・25.4・28.2。
@@ -160,6 +161,47 @@ RSpec.describe YouTubeConnectService, "#complete（コールバックと接続�
       fake_youtube.fail_next(:live_not_enabled, on: :probe_channel_lookup)
 
       expect(complete_connect(flow, code: code)).to have_attributes(result: "live_not_enabled")
+    end
+  end
+
+  describe "チャンネル名が空・空白だけ（YouTube の応答のチャンネル名が使えない）: 接続は成立する。例外にしない（保存したあとに 500 にしない）。チャンネル名は置かない" do
+    blanks = { "空" => "", "半角の空白" => " ", "空白の連続" => "   ", "改行とタブ" => "\n\t ", "全角の空白" => "\u3000", "改行しない空白" => "\u00A0 ", "NUL" => "\0" }
+
+    blanks.each do |label, blank|
+      it "#{label}（connected）: 接続は成立する。チャンネル名はメモリに置かない" do
+        allow(fake_youtube).to receive(:probe_channel).and_return(ProbeResult.new(outcome: "connected", channel_title: blank))
+
+        completion = complete_connect(flow, code: code)
+
+        expect(completion).to have_attributes(result: "connected", reason: nil)
+        expect(connection_of).to have_attributes(state: "connected", connected_at: now, last_verified_at: now)
+        expect(channel_names.cached(user.id)).to be_nil
+      end
+    end
+
+    it "ライブ未有効（live_not_enabled）でも、同じ: 接続は成立する" do
+      allow(fake_youtube).to receive(:probe_channel).and_return(ProbeResult.new(outcome: "live_not_enabled", channel_title: " "))
+
+      expect(complete_connect(flow, code: code)).to have_attributes(result: "live_not_enabled")
+      expect(connection_of).to have_attributes(state: "live_not_enabled")
+      expect(channel_names.cached(user.id)).to be_nil
+    end
+
+    it "再接続で、前のチャンネル名が残っていても、使えない新しい名前では、前の名前を捨てる（古い名前を残さない）" do
+      channel_names.write(user.id, "dummy-previous-channel-title")
+      allow(fake_youtube).to receive(:probe_channel).and_return(ProbeResult.new(outcome: "connected", channel_title: "  "))
+
+      complete_connect(flow, code: code)
+
+      expect(channel_names.cached(user.id)).to be_nil
+    end
+
+    it "使えるチャンネル名は、前後の空白を含めて、そのまま置く（空白を勝手に削らない）" do
+      allow(fake_youtube).to receive(:probe_channel).and_return(ProbeResult.new(outcome: "connected", channel_title: " dummy channel "))
+
+      complete_connect(flow, code: code)
+
+      expect(channel_names.cached(user.id)).to eq(" dummy channel ")
     end
   end
 
@@ -440,6 +482,95 @@ RSpec.describe YouTubeConnectService, "#complete（コールバックと接続�
     end
   end
 
+  describe "想定外の例外（DB の失敗など）が出ても、受け取ったトークンを残さない（成立しなかったときだけ、失効させる。例外は握りつぶさず伝える）" do
+    before { allow(fake_oidc).to receive(:revoke).and_call_original }
+
+    def existing_connection
+      create(:youtube_connection, :with_stream, user: user, state: "connected", connected_at: now - 9.days, last_verified_at: now - 2.days)
+    end
+
+    context "接続の保存が失敗する（DB の失敗。トランザクションは巻き戻る）" do
+      before { allow_any_instance_of(YoutubeConnection).to receive(:discard_stream!).and_raise(ActiveRecord::StatementInvalid, "dummy failure") }
+
+      it "既存の接続が無い: 例外は伝わる。受け取った更新トークンを、Google 側で失効させる（1 回）。接続の行は作られない" do
+        granted = grant_of(flow, code)
+
+        expect { complete_connect(flow, code: code) }.to raise_error(ActiveRecord::StatementInvalid)
+
+        expect(fake_oidc).to have_received(:revoke).with(token: granted.refresh_token).once
+        expect(YoutubeConnection.owned_by(user)).to be_empty
+        expect(database_dump).not_to include(granted.refresh_token)
+      end
+
+      it "既存の接続がある: 例外は伝わる。失効させない（同じ付与を共有するため）。既存の接続は変わらない" do
+        existing = existing_connection
+        before = snapshot(existing)
+
+        expect { complete_connect(flow, code: code) }.to raise_error(ActiveRecord::StatementInvalid)
+
+        expect(fake_oidc).not_to have_received(:revoke)
+        expect(snapshot(existing)).to eq(before)
+      end
+    end
+
+    context "接続時の確認（YouTube の窓口）が、型付きでない想定外の例外を投げる" do
+      before { allow(fake_youtube).to receive(:probe_channel).and_raise(RuntimeError, "dummy unexpected failure") }
+
+      it "既存の接続が無い: 例外は伝わる。受け取った更新トークンを、Google 側で失効させる（1 回）" do
+        granted = grant_of(flow, code)
+
+        expect { complete_connect(flow, code: code) }.to raise_error(RuntimeError, /dummy unexpected failure/)
+
+        expect(fake_oidc).to have_received(:revoke).with(token: granted.refresh_token).once
+        expect(YoutubeConnection.owned_by(user)).to be_empty
+      end
+
+      it "既存の接続がある: 例外は伝わる。失効させない。既存の接続は変わらない" do
+        existing = existing_connection
+        before = snapshot(existing)
+
+        expect { complete_connect(flow, code: code) }.to raise_error(RuntimeError, /dummy unexpected failure/)
+
+        expect(fake_oidc).not_to have_received(:revoke)
+        expect(snapshot(existing)).to eq(before)
+      end
+    end
+
+    context "保存が済んだあとの例外（チャンネル名のメモリへの書き込みが失敗）" do
+      before { allow(channel_names).to receive(:write).and_raise(RuntimeError, "dummy cache failure") }
+
+      it "例外は伝わる。保存した接続は残り、失効させない（保存した更新トークンを無効にしない）" do
+        expect { complete_connect(flow, code: code) }.to raise_error(RuntimeError, /dummy cache failure/)
+
+        expect(fake_oidc).not_to have_received(:revoke)
+        expect(connection_of).to have_attributes(state: "connected")
+        expect(token_vault.access_token(user_id: user.id, now: now)).to start_with("fake-access-token-")
+      end
+    end
+
+    it "失効の呼び出し自体が失敗しても（一時的な失敗）、元の例外が伝わる。失敗を記録する" do
+      allow(fake_oidc).to receive(:revoke).and_raise(YouTubeErrors::TokenTemporarilyUnavailable.new(call_kind: :token_revoke, status: 503))
+      allow(fake_youtube).to receive(:probe_channel).and_raise(RuntimeError, "dummy unexpected failure")
+
+      output = capture_logs { expect { complete_connect(flow, code: code) }.to raise_error(RuntimeError, /dummy unexpected failure/) }
+
+      expect(output).to include("[youtube_connect] revoke failed user_id=#{user.id}")
+    end
+
+    it "成立のとき（例外なし）は、失効させない" do
+      complete_connect(flow, code: code)
+
+      expect(fake_oidc).not_to have_received(:revoke)
+    end
+
+    it "不成立の確定（権限の部分拒否）は、これまでどおり 1 回だけ失効させる（二重に失効させない）" do
+      granted_code = grant_code(flow, kind: FakeGoogleOidc::WITHOUT_YOUTUBE_SCOPE)
+
+      expect(complete_connect(flow, code: granted_code)).to have_attributes(result: "scope_denied")
+      expect(fake_oidc).to have_received(:revoke).once
+    end
+  end
+
   describe "コードを交換する前の拒否（unverifiable。トークンを受け取らないので、失効もしない）" do
     before do
       allow(fake_oidc).to receive(:exchange_youtube_code).and_call_original
@@ -620,6 +751,19 @@ RSpec.describe YouTubeConnectService, "#complete（コールバックと接続�
       completion = complete_connect(flow, code: code)
 
       expect(completion.to_h.keys).to eq(%i[ result reason ])
+    end
+
+    it "確認の結果（Verdict。内部の値）は、inspect・to_s・pretty_inspect・pp に、チャンネル名を出さない（Data の既定の pretty_print は、メンバーの値をそのまま出す）" do
+      verdict = described_class.const_get(:Verdict).new(kind: :connected, channel_title: "dummy-channel-title-must-not-appear", reason: nil)
+
+      [
+        verdict.inspect, verdict.to_s, verdict.pretty_inspect, [ verdict ].pretty_inspect, { verdict: verdict }.pretty_inspect,
+        PP.pp(verdict, +""), PP.singleline_pp(verdict, +""), PP.pp(verdict, +"", 10)
+      ].each do |text|
+        expect(text).not_to include("must-not-appear")
+        expect(text).to include("FILTERED")
+      end
+      expect(verdict.pretty_inspect.chomp).to eq(verdict.inspect)
     end
   end
 

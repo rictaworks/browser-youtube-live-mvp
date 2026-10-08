@@ -6,7 +6,8 @@ require "support/youtube_connect_support"
 #   再確認: 接続済み・ライブ未有効のとき、チャンネルとライブの有効を再確認し（各 1 ユニットの一覧取得。共通枠から支出）、connected と live_not_enabled を更新する。
 #           接続が無ければ not_connected。認可失効（revoked）は、再確認せず、そのまま返す。
 #           トークンの更新が恒久的に失敗した・権限が不足していれば、認可失効にする。確認不能（共通枠の枯渇・一時的な失敗・チャンネルが見つからない）は、状態を変えない。
-#   チャンネル名: 最長 10 分のメモリのキャッシュ。キャッシュがあれば再取得しない（共通枠を消費しない）。取得に失敗しても例外にせず nil（失敗を記録する）。状態を変えない。
+#   チャンネル名: 最長 10 分のメモリのキャッシュ。キャッシュがあれば再取得しない（共通枠を消費しない）。取得に失敗しても例外にせず nil（失敗を記録する）。
+#                 失敗は短時間（config/youtube_connect.yml。60 秒）だけ覚え、その間は YouTube を呼ばない（障害中の再読み込みが共通枠を使い切らない）。状態を変えない。
 RSpec.describe YouTubeConnectService, "#recheck・#channel_title" do
   include LedgerSupport
   include YouTubeConnectSupport
@@ -155,6 +156,20 @@ RSpec.describe YouTubeConnectService, "#recheck・#channel_title" do
         service.recheck(user: user, now: now)
 
         expect(connection.reload).to have_attributes(youtube_stream_id: "dummy-stream-id-0001", refresh_token_ciphertext: ciphertext)
+      end
+    end
+
+    describe "チャンネル名が空・空白だけ（YouTube の応答のチャンネル名が使えない）" do
+      it "再確認は成功する（状態と確認の時刻を更新する）。例外にしない（更新したあとに 500 にしない）。前のチャンネル名は捨てる" do
+        connection = store_connection(state: "live_not_enabled")
+        channel_names.write(user.id, "dummy-previous-channel-title")
+        allow(fake_youtube).to receive(:probe_channel).and_return(ProbeResult.new(outcome: "connected", channel_title: "   "))
+
+        outcome = service.recheck(user: user, now: now)
+
+        expect(outcome).to have_attributes(outcome: :checked, state: "connected")
+        expect(connection.reload).to have_attributes(state: "connected", last_verified_at: now)
+        expect(channel_names.cached(user.id)).to be_nil
       end
     end
 
@@ -414,7 +429,7 @@ RSpec.describe YouTubeConnectService, "#recheck・#channel_title" do
       expect(QuotaEntry.count).to eq(before)
     end
 
-    describe "取得に失敗しても例外にしない（nil。失敗を記録する。キャッシュしない）" do
+    describe "取得に失敗しても例外にしない（nil。失敗を記録する。失敗は短時間だけ覚える）" do
       {
         "一時的な失敗" => [ ->(youtube) { youtube.fail_next(:transient) }, "transient" ],
         "タイムアウト" => [ ->(youtube) { youtube.fail_next(:timeout) }, "timeout" ],
@@ -423,7 +438,7 @@ RSpec.describe YouTubeConnectService, "#recheck・#channel_title" do
         "チャンネルが無い" => [ ->(youtube) { youtube.fail_next(:no_channel) }, "channel_not_found" ],
         "アクセストークンの更新の一時的な失敗" => [ ->(youtube) { youtube.fail_next(:token_temporarily_unavailable) }, "token_temporarily_unavailable" ]
       }.each do |label, (arrange, reason)|
-        it "#{label}: nil を返し、キャッシュしない（次の呼び出しは取得し直す）。理由を記録する" do
+        it "#{label}: nil を返し、チャンネル名としては保持しない。理由を記録する。失敗は 60 秒だけ覚え、その間は YouTube を呼ばない。過ぎたら取得し直す" do
           store_connection(state: "connected")
           arrange.call(fake_youtube)
 
@@ -431,8 +446,92 @@ RSpec.describe YouTubeConnectService, "#recheck・#channel_title" do
 
           expect(output).to include("[youtube_connect] channel title unavailable user_id=#{user.id} reason=#{reason}")
           expect(channel_names.cached(user.id)).to be_nil
-          expect(service.channel_title(user)).to eq("Fake Channel") # 次は取得し直せる
+          allow(fake_youtube).to receive(:probe_channel).and_call_original
+          travel_to(now + 59)
+          expect(service.channel_title(user)).to be_nil
+          expect(fake_youtube).not_to have_received(:probe_channel)
+          travel_to(now + 60)
+          expect(service.channel_title(user)).to eq("Fake Channel") # 覚えた時間が過ぎたので、取得し直せる
+          expect(fake_youtube).to have_received(:probe_channel).once
         end
+      end
+
+      it "障害中の連打: YouTube が失敗し続けても、100 回呼んで、確認は 1 回だけ（共通枠の 500 ユニットを使い切らない）" do
+        store_connection(state: "connected")
+        allow(fake_youtube).to receive(:probe_channel).and_raise(YouTubeErrors::Transient.new(call_kind: :probe_channel_lookup))
+
+        100.times { expect(service.channel_title(user)).to be_nil }
+
+        expect(fake_youtube).to have_received(:probe_channel).once
+      end
+
+      it "チャンネルを削除した利用者の連打: チャンネルが見つからない応答が続いても、100 回呼んで、確認は 1 回だけ" do
+        store_connection(state: "connected")
+        allow(fake_youtube).to receive(:probe_channel).and_return(ProbeResult.new(outcome: "no_channel", channel_title: nil))
+
+        100.times { expect(service.channel_title(user)).to be_nil }
+
+        expect(fake_youtube).to have_received(:probe_channel).once
+      end
+
+      it "失敗の覚えは、アカウントごと: あるアカウントの失敗は、別のアカウントの取得を止めない" do
+        other = create(:user)
+        store_connection(user)
+        store_connection(other)
+        fake_youtube.fail_next(:transient)
+
+        expect(service.channel_title(user)).to be_nil
+        expect(service.channel_title(other)).to eq("Fake Channel")
+      end
+
+      it "失敗を覚えている間に、再接続が成立すると、失敗の記録は消え、成立で得たチャンネル名をそのまま使う（共通枠を消費しない）" do
+        store_connection(state: "connected")
+        fake_youtube.fail_next(:transient)
+        expect(service.channel_title(user)).to be_nil
+
+        run_connect(user)
+        before = QuotaEntry.count
+        allow(fake_youtube).to receive(:probe_channel).and_call_original
+
+        expect(service.channel_title(user)).to eq("Fake Channel")
+        expect(fake_youtube).not_to have_received(:probe_channel)
+        expect(QuotaEntry.count).to eq(before)
+      end
+
+      it "失敗を覚えている間に、再確認が成功すると、失敗の記録は消え、チャンネル名が使える" do
+        store_connection(state: "connected")
+        fake_youtube.fail_next(:transient)
+        expect(service.channel_title(user)).to be_nil
+
+        expect(service.recheck(user: user, now: now)).to have_attributes(outcome: :checked, state: "connected")
+
+        allow(fake_youtube).to receive(:probe_channel).and_call_original
+        expect(service.channel_title(user)).to eq("Fake Channel")
+        expect(fake_youtube).not_to have_received(:probe_channel)
+      end
+
+      it "失敗を覚えている間に、再確認が失敗しても（確認不能）、失敗の記録は、そのまま（延びない）" do
+        store_connection(state: "connected")
+        fake_youtube.fail_next(:transient)
+        expect(service.channel_title(user)).to be_nil
+
+        travel_to(now + 30)
+        fake_youtube.fail_next(:transient)
+        expect(service.recheck(user: user, now: now + 30)).to be_unverifiable
+
+        travel_to(now + 60)
+        expect(service.channel_title(user)).to eq("Fake Channel") # 最初の失敗から 60 秒。再確認の失敗では延びない
+      end
+
+      it "チャンネル名が空・空白だけ（YouTube の応答のチャンネル名が使えない）: nil。例外にしない。理由（channel_title_blank）を記録する。失敗として覚える" do
+        store_connection(state: "connected")
+        allow(fake_youtube).to receive(:probe_channel).and_return(ProbeResult.new(outcome: "connected", channel_title: "  "))
+
+        output = capture_logs { expect(service.channel_title(user)).to be_nil }
+
+        expect(output).to include("[youtube_connect] channel title unavailable user_id=#{user.id} reason=channel_title_blank")
+        expect(service.channel_title(user)).to be_nil
+        expect(fake_youtube).to have_received(:probe_channel).once
       end
 
       it "共通枠の枯渇: nil（YouTube を呼ばない）" do

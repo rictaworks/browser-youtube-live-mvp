@@ -1,4 +1,5 @@
 require "rails_helper"
+require "pp"
 require "support/youtube_connect_support"
 
 # YouTube 接続の開始 YouTubeConnectService#start（issue #11。requirements.md 7.2・23.1。src/contracts/http-api.md 3 章 connect/start）。
@@ -79,6 +80,19 @@ RSpec.describe YouTubeConnectService, "#start（認可の開始）" do
       expect(text).not_to include(started.state)
       expect(text).not_to include(started.code_verifier)
     end
+  end
+
+  it "返す値は、pp・pretty_inspect でも、state・検証子・認可 URL を出さない（Data の既定の pretty_print は、メンバーの値をそのまま出す）" do
+    texts = [
+      started.pretty_inspect, [ started ].pretty_inspect, { started: started }.pretty_inspect,
+      PP.pp(started, +""), PP.singleline_pp(started, +""), PP.pp(started, +"", 20)
+    ]
+
+    texts.each do |text|
+      [ started.state, started.code_verifier, started.authorization_url ].each { |secret| expect(text).not_to include(secret) }
+      expect(text).to include("FILTERED")
+    end
+    expect(started.pretty_inspect.chomp).to eq(started.inspect)
   end
 
   it "保存済みのアカウントだけ受け付ける（nil・保存前のアカウントは ArgumentError）" do

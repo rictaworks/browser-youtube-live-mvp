@@ -4,9 +4,12 @@
 #                                       bot 判定（行為名 youtube_connect）-> 認可 URL を返す。state・PKCE の検証子は bl_oauth（暗号化・短命の Cookie。用途 connect と
 #                                       内部のアカウント識別子つき）に持つ。測定イベント connect_started
 #   GET  /api/youtube/connect/callback  Google からの戻り先。bl_oauth の state の照合・ログイン中のセッションのアカウントとの一致・コードの交換・接続時の確認
-#                                       -> 302 /account?connect=<connect_result>（公開オリジンの絶対 URL）。測定イベント connect_completed / connect_failed。
+#                                       -> 302 /account?connect=<connect_result>（公開オリジンの絶対 URL）。
 #                                       bl_oauth は、成功・失敗のどちらでも失効させる。ブラウザの遷移なので、ログインしていなくても受けて（匿名と宣言する）、
-#                                       アカウントとの不一致として unverifiable で戻す（JSON の 401 を、画面に出さない）。CSRF の対象外（state で守る）
+#                                       アカウントとの不一致として unverifiable で戻す（JSON の 401 を、画面に出さない）。CSRF の対象外（state で守る）。
+#                                       測定イベント connect_completed / connect_failed は、ログイン中のアカウントが開始した接続（そのアカウントの有効な
+#                                       bl_oauth を持つ要求）だけ記録する。匿名の要求・開始していない要求（bl_oauth が無い・無効・ほかのアカウントのもの）は、
+#                                       DB へ書き込まない（匿名で到達できる書き込みを持たない。測定イベントは内部のアカウント識別子にのみ紐づける。18.2）
 #   POST /api/youtube/recheck           再確認（ライブ配信が有効かの確認）。アカウント単位で 1 分に 1 回・1 日 20 回（超過は 429 rate_limited・retry_at）。
 #                                       接続が無ければ 409 not_connected。認可失効は再確認せず 200（state: revoked）。接続済み・ライブ未有効のとき、チャンネルと
 #                                       ライブの有効を再確認し、connected と live_not_enabled を更新して 200 {"youtube":{state, channel_title: null, can_recheck_at}}。
@@ -48,7 +51,7 @@ module Api
         user: current_user, payload: payload, code: params[:code], state: params[:state], error: params[:error],
         redirect_uri: callback_uri, now: current_time
       )
-      record_connect_event(completion)
+      record_connect_event(completion) if started_by_current_user?(payload)
       redirect_to_public("#{ACCOUNT_PATH}?#{CONNECT_QUERY}=#{completion.result}")
     end
 
@@ -92,10 +95,17 @@ module Api
       nil
     end
 
-    # 成立は connect_completed、不成立は connect_failed。理由の符号（結果）だけを残す。ログインしていなければ、アカウントに紐づけない
+    # ログイン中のアカウントが開始した接続か（そのアカウントの有効な bl_oauth を持つ要求か）。測定イベントを記録してよいのは、この要求だけ。
+    # 匿名の要求・bl_oauth が無い／無効（改ざん・期限切れ・用途違い）な要求・ほかのアカウントの bl_oauth を使った要求は、開始した接続ではない。
+    # これらを記録すると、Cookie の無い GET を送るだけで、測定イベントの表（無料枠の DB の容量）を埋められる
+    def started_by_current_user?(payload)
+      !current_user.nil? && !payload.nil? && payload.user_id == current_user.id
+    end
+
+    # 成立は connect_completed、不成立は connect_failed。理由の符号（結果）だけを残す。内部のアカウント識別子にのみ紐づける
     def record_connect_event(completion)
       type = completion.success? ? Contract::UsageEventType::CONNECT_COMPLETED : Contract::UsageEventType::CONNECT_FAILED
-      UsageRecorder.record(user_id: current_user&.id, type: type, reason_code: completion.result)
+      UsageRecorder.record(user_id: current_user.id, type: type, reason_code: completion.result)
     end
 
     # --- recheck ---

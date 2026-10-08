@@ -123,6 +123,19 @@ RSpec.describe "GET /api/youtube/connect/callback", type: :request do
       expect(oidc).not_to have_received(:revoke)
     end
 
+    it "YouTube の応答のチャンネル名が空白だけでも、接続は成立する（302 connected。保存したあとに 500 にしない）。チャンネル名は置かない" do
+      # YouTubeServices.current は、要求ごとに窓口を組み立てる（疑似の YouTube の状態だけが共有される）。どの窓口でも、チャンネル名が空白だけの応答にする
+      allow_any_instance_of(FakeYouTubeGateway).to receive(:probe_channel)
+        .and_return(ProbeResult.new(outcome: "connected", channel_title: "   "))
+
+      connect_callback(begin_browser_flow)
+
+      expect_connect_redirect("connected")
+      expect(connection_of).to have_attributes(state: "connected")
+      expect(UsageEvent.where(event_type: "connect_completed").sole.reason_code).to eq("connected")
+      expect(ChannelNameCache.shared.cached(user.id)).to be_nil
+    end
+
     it "確認は共通枠から 2 ユニット（配信の予約は取り崩さない）" do
       connect_callback(begin_browser_flow)
 
@@ -300,11 +313,10 @@ RSpec.describe "GET /api/youtube/connect/callback", type: :request do
       expect_unverifiable
     end
 
-    it "ログインしていない（セッションの Cookie が無い）: アカウント画面へ戻す（unverifiable）。接続を作らない・測定イベントは、アカウントに紐づけない" do
-      connect_callback(flow, session: nil)
+    it "ログインしていない（セッションの Cookie が無い）: アカウント画面へ戻す（unverifiable）。接続を作らない。測定イベントは記録しない（匿名の要求は、DB へ書き込まない）" do
+      expect { connect_callback(flow, session: nil) }.not_to change(UsageEvent, :count)
 
       expect_unverifiable
-      expect(UsageEvent.where(event_type: "connect_failed").sole.user_id).to be_nil
     end
 
     it "ログイン中のアカウントが、bl_oauth を作ったアカウントと違う: unverifiable。どちらのアカウントの接続も、作らず・変えない" do
@@ -394,6 +406,89 @@ RSpec.describe "GET /api/youtube/connect/callback", type: :request do
 
     it "失敗の応答は、セッション・アカウントを作らない・変えない" do
       expect { connect_callback(flow, state: "dummy-other-state") }.not_to change { [ User.count, Session.count ] }
+    end
+  end
+
+  describe "測定イベント: ログイン中のアカウントが開始した接続（有効な bl_oauth）の結果だけ記録する。匿名・開始していない要求は、DB へ書き込まない" do
+    let!(:flow) { begin_browser_flow }
+    let(:result_events) { UsageEvent.where(event_type: %w[ connect_completed connect_failed ]) }
+    let(:login_purpose_cookie) do
+      OAuthStateCookie.new(secret: Rails.application.secret_key_base).seal(
+        state: flow[:state], nonce: "dummy-nonce", code_verifier: "dummy-verifier", purpose: "login", now: now
+      )
+    end
+    let(:foreign_secret_cookie) do
+      OAuthStateCookie.new(secret: "dummy-another-secret-key-base-0002").seal(
+        state: flow[:state], nonce: "dummy-nonce", code_verifier: "dummy-verifier", purpose: "connect", user_id: user.id, now: now
+      )
+    end
+
+    it "ログインしていない要求を、Cookie なしで何度送っても（40 回）、行が増えない。いずれも unverifiable で戻す" do
+      expect do
+        40.times { api_get "/api/youtube/connect/callback", headers: no_cookies }
+      end.not_to change(UsageEvent, :count)
+
+      expect(response.headers["Location"]).to eq("#{origin}/account?connect=unverifiable")
+    end
+
+    it "ログインしていなくて、有効な bl_oauth を持つ要求（セッションの Cookie だけが無い）も、記録しない" do
+      expect { 5.times { connect_callback(flow, session: nil) } }.not_to change(UsageEvent, :count)
+    end
+
+    it "ログインしていても、有効な bl_oauth が無い要求（無い・改ざん・でたらめ・ほかの秘密値・用途 login）は、記録しない。何度送っても、行が増えない" do
+      variants = {
+        "bl_oauth が無い" => nil,
+        "改ざん" => flow[:oauth_cookie].sub(/.\z/) { |char| char == "A" ? "B" : "A" },
+        "でたらめ" => "garbage",
+        "ほかの秘密値" => foreign_secret_cookie,
+        "用途が login" => login_purpose_cookie
+      }
+
+      expect do
+        variants.each_value { |cookie| 10.times { connect_callback(flow, oauth_cookie: cookie) } }
+      end.not_to change(UsageEvent, :count)
+      expect_connect_redirect("unverifiable")
+    end
+
+    it "期限切れの bl_oauth（開始から 10 分以上）も、記録しない" do
+      travel_to(now + 601)
+
+      expect { connect_callback(flow) }.not_to change(UsageEvent, :count)
+      expect_connect_redirect("unverifiable")
+    end
+
+    it "セッションが失効している（破棄された）: 記録しない" do
+      gone = login
+      SessionStore.new.revoke(gone.session)
+
+      expect { connect_callback(flow, session: gone) }.not_to change(UsageEvent, :count)
+    end
+
+    it "ほかのアカウントの bl_oauth を、他方のセッションで使っても、どちらのアカウントにも記録しない" do
+      other = create(:user, google_sub: "dev-user-2")
+
+      expect { connect_callback(flow, session: sign_in(other, now: now)) }.not_to change(UsageEvent, :count)
+      expect(result_events.where(user_id: [ user.id, other.id ])).to be_empty
+    end
+
+    {
+      "state が違う" => { state: "dummy-other-state" },
+      "コードが無い" => { code: nil },
+      "コードが書き換えられている" => { code: "dummy-tampered-code" },
+      "error=server_error" => { code: nil, error: "server_error" }
+    }.each do |label, overrides|
+      it "開始した接続の失敗（#{label}）は、記録する: connect_failed を 1 件、このアカウントに、結果の符号 unverifiable だけで" do
+        expect { connect_callback(flow, **overrides) }.to change { result_events.count }.by(1)
+
+        expect(result_events.sole).to have_attributes(event_type: "connect_failed", user_id: user.id, reason_code: "unverifiable")
+        expect_connect_redirect("unverifiable")
+      end
+    end
+
+    it "開始した接続の成功は、connect_completed を 1 件、このアカウントに記録する" do
+      expect { connect_callback(flow) }.to change { result_events.count }.by(1)
+
+      expect(result_events.sole).to have_attributes(event_type: "connect_completed", user_id: user.id, reason_code: "connected")
     end
   end
 

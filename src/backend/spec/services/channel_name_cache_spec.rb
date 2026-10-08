@@ -124,14 +124,14 @@ RSpec.describe ChannelNameCache do
       expect(calls).to be_empty
     end
 
-    it "取得処理が nil を返したとき（チャンネルが無いなど）: nil を返し、保持しない（次回は取得し直す）" do
+    it "取得処理が nil を返したとき（チャンネルが無いなど）: nil を返す。チャンネル名としては保持しない。失敗として、短時間だけ覚える（下の「失敗の否定キャッシュ」）" do
       fetcher, calls = counting(nil)
 
       expect(cache.fetch(user_id, &fetcher)).to be_nil
       expect(cache.fetch(user_id, &fetcher)).to be_nil
 
-      expect(calls.size).to eq(2)
-      expect(cache.size).to eq(0)
+      expect(cache.cached(user_id)).to be_nil
+      expect(calls.size).to eq(1)
     end
 
     it "取得処理が例外を投げたとき: そのまま伝え、保持しない。次の呼び出しは、取得し直せる（鍵の排他も解放される）" do
@@ -167,6 +167,164 @@ RSpec.describe ChannelNameCache do
       original << "-changed"
 
       expect(cache.cached(user_id)).to eq("dummy-original-title")
+    end
+  end
+
+  describe "失敗の否定キャッシュ（取得に失敗したとき、短時間だけ覚える。その間は取得処理を呼ばない。永続化しない）" do
+    it "既定の秒数は、設定ファイル（config/youtube_connect.yml）の値。成功の保持（最長 10 分）より短い" do
+      configured = Rails.application.config_for(:youtube_connect).fetch(:channel_title_failure_cache_seconds)
+
+      expect(described_class.new(clock: clock).failure_ttl_seconds).to eq(configured)
+      expect(configured).to be_between(1, described_class::MAX_TTL_SECONDS - 1)
+    end
+
+    it "既定の秒数は、設定ファイルから読む（コードに直書きしない）" do
+      allow(Rails.application).to receive(:config_for).and_call_original
+      allow(Rails.application).to receive(:config_for).with(:youtube_connect).and_return({ channel_title_failure_cache_seconds: 45 })
+
+      expect(described_class.new(clock: clock).failure_ttl_seconds).to eq(45)
+    end
+
+    it "秒数は 1 以上 600 以下の整数（成功の保持の最長を超えない）。0 以下・数値でないものは拒否" do
+      [ 0, -1, 601, "60", nil, 1.5 ].each do |invalid|
+        expect { described_class.new(clock: clock, failure_ttl_seconds: invalid) }.to raise_error(ArgumentError, /failure_ttl_seconds/)
+      end
+      expect(described_class.new(clock: clock, failure_ttl_seconds: 600).failure_ttl_seconds).to eq(600)
+      expect(described_class.new(clock: clock, failure_ttl_seconds: 1).failure_ttl_seconds).to eq(1)
+    end
+
+    it "失敗（取得処理が nil）のあと、59 秒後までは、取得処理を呼ばず nil を返す" do
+      fetcher, calls = counting(nil)
+      cache.fetch(user_id, &fetcher)
+
+      advance(59)
+
+      expect(cache.fetch(user_id, &fetcher)).to be_nil
+      expect(cache.fetch(user_id, &fetcher)).to be_nil
+      expect(calls.size).to eq(1)
+    end
+
+    it "ちょうど 60 秒後に失効する（境界）。取得処理を呼び直す。成功すれば、改めて 10 分" do
+      fetcher, calls = counting(nil)
+      cache.fetch(user_id, &fetcher)
+
+      advance(60)
+
+      expect(cache.fetch(user_id) { calls << true && title }).to eq(title)
+      expect(calls.size).to eq(2)
+      advance(599)
+      expect(cache.cached(user_id)).to eq(title)
+    end
+
+    it "読み出しで寿命は延びない（失敗の記録から 60 秒が最長。何度読んでも）" do
+      fetcher, calls = counting(nil)
+      cache.fetch(user_id, &fetcher)
+
+      5.times do
+        advance(11)
+        cache.fetch(user_id, &fetcher)
+      end
+      advance(5) # 失敗の記録から 60 秒
+      cache.fetch(user_id, &fetcher)
+
+      expect(calls.size).to eq(2)
+    end
+
+    it "障害中の連打: 同じアカウントが 100 回読み込んでも、取得処理（YouTube の呼び出し）は 1 回" do
+      fetcher, calls = counting(nil)
+
+      100.times { cache.fetch(user_id, &fetcher) }
+
+      expect(calls.size).to eq(1)
+    end
+
+    it "cached は、失敗の記録を返さない（nil）。チャンネル名ではないため" do
+      cache.fetch(user_id) { nil }
+
+      expect(cache.cached(user_id)).to be_nil
+      expect(cache.size).to eq(1)
+    end
+
+    it "write（チャンネル名が分かったとき）は、失敗の記録を置き換える。次の fetch は、取得処理を呼ばずに名前を返す" do
+      cache.fetch(user_id) { nil }
+      cache.write(user_id, title)
+      fetcher, calls = counting("dummy-other-title")
+
+      expect(cache.fetch(user_id, &fetcher)).to eq(title)
+      expect(calls).to be_empty
+    end
+
+    it "delete（再接続・接続の解除・アカウント削除）は、失敗の記録も破棄する。次の fetch は取得処理を呼ぶ" do
+      cache.fetch(user_id) { nil }
+      cache.delete(user_id)
+      fetcher, calls = counting(title)
+
+      expect(cache.fetch(user_id, &fetcher)).to eq(title)
+      expect(calls.size).to eq(1)
+    end
+
+    it "clear は、失敗の記録も破棄する" do
+      cache.fetch(user_id) { nil }
+      cache.fetch(other_user_id) { nil }
+
+      cache.clear
+
+      expect(cache.size).to eq(0)
+    end
+
+    it "アカウント単位: あるアカウントの失敗は、別のアカウントの取得を止めない" do
+      cache.fetch(user_id) { nil }
+      fetcher, calls = counting(title)
+
+      expect(cache.fetch(other_user_id, &fetcher)).to eq(title)
+      expect(calls.size).to eq(1)
+    end
+
+    it "取得処理が例外を投げたときは、失敗として覚えない（例外は伝わり、次の呼び出しは取得し直せる）" do
+      expect { cache.fetch(user_id) { raise YouTubeErrors::Transient.new(call_kind: :probe_channel_lookup) } }.to raise_error(YouTubeErrors::Transient)
+
+      fetcher, calls = counting(title)
+
+      expect(cache.fetch(user_id, &fetcher)).to eq(title)
+      expect(calls.size).to eq(1)
+    end
+
+    it "失効した失敗の記録も、書き込みのときに捨てる（際限なく増えない）" do
+      Array.new(50) { SecureRandom.uuid }.each { |id| cache.fetch(id) { nil } }
+      expect(cache.size).to eq(50)
+
+      advance(61)
+      cache.write(user_id, title)
+
+      expect(cache.size).to eq(1)
+    end
+
+    it "同時に fetch しても（失敗する取得処理）、取得処理は 1 回。全員が nil を得る" do
+      calls = Queue.new
+      gate = Queue.new
+      results = Queue.new
+      threads = Array.new(12) do
+        Thread.new do
+          gate.pop
+          results << cache.fetch(user_id) do
+            calls << true
+            sleep 0.05
+            nil
+          end
+        end
+      end
+      12.times { gate << true }
+      threads.each(&:join)
+
+      expect(calls.size).to eq(1)
+      expect(Array.new(results.size) { results.pop }.uniq).to eq([ nil ])
+    end
+
+    it "失敗の記録にも、チャンネル名もアカウントの識別子も出さない（inspect・pretty_inspect）" do
+      cache.fetch(user_id) { nil }
+
+      [ cache.inspect, cache.pretty_inspect ].each { |text| expect(text).not_to include(user_id) }
+      expect(cache.inspect).to eq("#<ChannelNameCache size=1>")
     end
   end
 
@@ -332,6 +490,21 @@ RSpec.describe ChannelNameCache do
         expect(text).not_to include(user_id)
       end
       expect(cache.inspect).to eq("#<ChannelNameCache size=1>")
+    end
+
+    it "保持している 1 件（Entry）も、inspect・to_s・pretty_inspect・pp に、チャンネル名を出さない（Data の既定の pretty_print は、メンバーの値をそのまま出す）" do
+      entry = described_class.const_get(:Entry).new(title: title, expires_at: Time.utc(2026, 10, 8, 4, 40, 0))
+      failure = described_class.const_get(:Entry).new(title: nil, expires_at: Time.utc(2026, 10, 8, 4, 40, 0))
+
+      [
+        entry.inspect, entry.to_s, entry.pretty_inspect, [ entry ].pretty_inspect, { entry: entry }.pretty_inspect,
+        PP.pp(entry, +""), PP.singleline_pp(entry, +""), PP.pp(entry, +"", 10)
+      ].each do |text|
+        expect(text).not_to include(title)
+        expect(text).to include("FILTERED")
+      end
+      expect(entry.pretty_inspect.chomp).to eq(entry.inspect)
+      expect(failure.pretty_inspect.chomp).to eq(failure.inspect)
     end
 
     it "保持している値を、一覧・ハッシュとして取り出す口を持たない（取り出せるのは、アカウントを指定した 1 件だけ）" do
