@@ -183,7 +183,7 @@ class YouTubeConnectService
     apply_recheck(account, connection, verify(connection, nil), now)
   end
 
-  # チャンネル名。キャッシュがあれば、YouTube を呼ばない。取得に失敗しても例外にせず nil（失敗を記録する。キャッシュしない）。
+  # チャンネル名。キャッシュがあれば、YouTube を呼ばない。取得に失敗しても例外にせず nil（失敗を記録し、一定の秒数だけ失敗を覚えて、その間は YouTube を呼ばない）。
   # 接続が無い・認可失効なら nil（YouTube を呼ばない）。状態を変えない（読み取りだけ。GET の副作用なし）
   def channel_title(user)
     account = persisted_user!(user)
@@ -328,7 +328,7 @@ class YouTubeConnectService
 
   # --- チャンネル名 ---
 
-  # キャッシュに無いときの取得。チャンネル名が得られなければ nil（キャッシュされない）。理由を記録する
+  # キャッシュに無いときの取得。チャンネル名が得られなければ nil（失敗は一定の秒数だけ覚える。チャンネル名としてはキャッシュされない）。理由を記録する
   def title_from(user, connection)
     verdict = verify(connection, nil)
     return verdict.channel_title if verdict.channel_title
