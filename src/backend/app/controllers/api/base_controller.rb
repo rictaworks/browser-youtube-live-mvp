@@ -3,11 +3,14 @@
 #
 # 要求は、次の順に評価する（process_action。本体の動作・パラメータの解釈・ログのための解釈より前に行う）。
 #   1. X-BFF-Secret（BFF の確認）                              403 forbidden
-#   2. 状態を変える要求は、X-BL-Client: web                      403 csrf_invalid
-#   3. 状態を変える要求で、ログイン済みなら X-CSRF-Token。Origin があれば、公開オリジンと一致   403 csrf_invalid
-#   4. セッションの最終利用の更新（ここまでを通った要求だけ）
-#   5. ログインが要る動作（requires_login）は、セッションが有効     401 not_logged_in
-#   6. 動作の本体
+#   2. ログインの方針の宣言（requires_login か allow_anonymous のどちらか 1 つ）   500 internal_error（宣言が無い・矛盾。issue #8）
+#   3. 状態を変える要求は、X-BL-Client: web                      403 csrf_invalid
+#   4. 状態を変える要求で、ログイン済みなら X-CSRF-Token。Origin があれば、公開オリジンと一致   403 csrf_invalid
+#   5. セッションの最終利用の更新（ここまでを通った要求だけ）
+#   6. ログインが要る動作（requires_login）は、セッションが有効     401 not_logged_in
+#   7. 動作の本体
+# すべての動作は、requires_login（ログインが要る）か allow_anonymous（匿名で受ける）のどちらか 1 つを、明示して宣言する。
+# 宣言を書き忘れた API が、匿名で到達できる事故を防ぐため（OWASP A01・A04）。宣言が無い動作・両方に宣言した動作は、本体を実行しない。
 # 失敗は、契約のエラーの形（{"error":{"code","details"}}）で返す（未ログイン 401・CSRF 403・存在しない 404・不正な入力 422・
 # 頻度 429・想定外の例外 500）。HTML のエラーページを返さない。すべての応答に Cache-Control: no-store を付ける。
 #
@@ -24,8 +27,9 @@ module Api
     # 二重にし、本文の解釈を、動作より前（ParamsWrapper）へ持ち込む）
     wrap_parameters false
 
-    # ログインが要る動作の規則（requires_login）。子クラスごとに持つ（親・別の子クラスへ影響しない）
+    # ログインが要る動作の規則（requires_login）・匿名で受ける動作の規則（allow_anonymous）。子クラスごとに持つ（親・別の子クラスへ影響しない）
     class_attribute :login_rule, instance_accessor: false, instance_predicate: false, default: nil
+    class_attribute :anonymous_rule, instance_accessor: false, instance_predicate: false, default: nil
 
     # 動作の中で起きた例外は、ここで受けて、応答にする（Rails の計測の内側。ログの "Completed 404 Not Found" が、実際の状態になる）。
     # rescue_from は使わない。Rails は、rescue_from で受けた例外の、メッセージを、ログへ出す（"rescue_from handled ... (メッセージ)"）。
@@ -48,11 +52,47 @@ module Api
       #   requires_login
       #   requires_login only: %i[ logout ]
       def requires_login(only: nil, except: nil)
-        self.login_rule = { only: Array(only).map(&:to_s).freeze, except: Array(except).map(&:to_s).freeze }.freeze
+        self.login_rule = build_rule(only, except)
+      end
+
+      # 匿名で受ける API の宣言（ログインしていなくても到達できる動作を、明示する）。書き方は requires_login と同じ。
+      #   allow_anonymous only: %i[ login_start callback ]
+      # 宣言が無い動作・requires_login と両方に宣言した動作は、要求時に 500 internal_error で拒否する（login_policy_for）。
+      def allow_anonymous(only: nil, except: nil)
+        self.anonymous_rule = build_rule(only, except)
       end
 
       def login_required_for?(action_name)
-        rule = login_rule
+        rule_covers?(login_rule, action_name)
+      end
+
+      def anonymous_allowed_for?(action_name)
+        rule_covers?(anonymous_rule, action_name)
+      end
+
+      # 動作ごとのログインの方針。
+      #   :login        ログインが要る（requires_login）
+      #   :anonymous    匿名で受ける（allow_anonymous）
+      #   :undeclared   どちらも宣言していない（宣言し忘れ）
+      #   :conflict     両方に宣言している（矛盾）
+      # :login と :anonymous だけが、動作できる。
+      def login_policy_for(action_name)
+        login = login_required_for?(action_name)
+        anonymous = anonymous_allowed_for?(action_name)
+        return :conflict if login && anonymous
+        return :login if login
+        return :anonymous if anonymous
+
+        :undeclared
+      end
+
+      private
+
+      def build_rule(only, except)
+        { only: Array(only).map(&:to_s).freeze, except: Array(except).map(&:to_s).freeze }.freeze
+      end
+
+      def rule_covers?(rule, action_name)
         return false if rule.nil?
 
         name = action_name.to_s
@@ -63,6 +103,9 @@ module Api
     end
 
     # どの経路にも当てはまらない /api の要求（config/routes.rb の /api の最後の経路）。BFF の確認・CSRF の検査のあと、404。
+    # ログインの有無によらず 404 を返す（匿名と宣言する）。
+    allow_anonymous only: :route_not_found
+
     def route_not_found
       raise Error::NotFound.new(reason: :route)
     end
@@ -90,9 +133,10 @@ module Api
 
     def authorize_request!
       verify_bff!
+      policy = declared_login_policy!
       verify_csrf! if state_changing_request?
       touch_session!
-      require_login! if self.class.login_required_for?(action_name)
+      require_login! if policy == :login
     end
 
     def state_changing_request?
@@ -106,7 +150,17 @@ module Api
       raise Error::Forbidden.new(reason: :bff_secret_rejected)
     end
 
-    # 2・3. X-BL-Client: web。Origin（あれば）が公開オリジンと一致すること。ログイン済みなら、X-CSRF-Token
+    # 2. ログインの方針の宣言（requires_login か allow_anonymous のどちらか 1 つ）。宣言が無い・矛盾する動作は、本体を実行せず、500。
+    # 応答には詳細を出さない（internal_error）。原因（方針・コントローラ・動作・リクエスト ID）は、ログに出す。宣言された方針を返す
+    def declared_login_policy!
+      policy = self.class.login_policy_for(action_name)
+      return policy if %i[ login anonymous ].include?(policy)
+
+      logger.error("[api] login policy is not usable policy=#{policy} controller=#{self.class.name} action=#{action_name} request_id=#{request.request_id}")
+      raise Error::InternalError.new(reason: :"login_policy_#{policy}")
+    end
+
+    # 3・4. X-BL-Client: web。Origin（あれば）が公開オリジンと一致すること。ログイン済みなら、X-CSRF-Token
     def verify_csrf!
       raise Error::CsrfInvalid.new(reason: :client_header) unless request.get_header(CLIENT_HEADER) == CLIENT_HEADER_VALUE
 

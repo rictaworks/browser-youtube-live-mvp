@@ -14,6 +14,8 @@ RSpec.describe Api::BaseController, type: :controller do
 
   controller(Api::BaseController) do
     requires_login only: %i[ members_only ]
+    # ほかの動作は、匿名で受けると明示する（宣言の無い動作は、拒否される。spec/controllers/api/login_policy_spec.rb）
+    allow_anonymous except: %i[ members_only ]
 
     def public_action
       render json: { ok: true }

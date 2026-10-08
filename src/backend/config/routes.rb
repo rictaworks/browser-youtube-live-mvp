@@ -14,6 +14,17 @@ Rails.application.routes.draw do
     namespace :api do
       post "usage-events", to: "usage_events#create", as: :usage_events
 
+      # 認証（issue #8）。ログインの開始・コールバックは匿名、ログアウトはログイン済みのみ（コントローラが宣言）
+      post "auth/login/start", to: "auth#login_start", as: :auth_login_start
+      get "auth/callback", to: "auth#callback", as: :auth_callback
+      post "auth/logout", to: "auth#logout", as: :auth_logout
+
+      # 疑似の Google の画面（issue #8）。開発・テストのみ。本番では経路を描かない（存在しない /api の経路として 404 not_found）。
+      # 疑似を使う環境かどうかは、外部サービスの実装の選択と同じ環境の判定（AppEnvironment#external_services）で決める
+      if AppEnvironment.current.external_services == :fake
+        get "dev/google/authorize", to: "/dev/google#authorize", as: :dev_google_authorize
+      end
+
       # 存在しない /api の経路。BFF の確認・CSRF の検査のあと、404 not_found（JSON）
       match "*unmatched", to: "base#route_not_found", via: :all, format: false
     end

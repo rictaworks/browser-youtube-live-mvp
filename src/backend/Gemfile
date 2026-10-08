@@ -11,6 +11,9 @@ gem "json", "~> 2.9"
 gem "pg", "~> 1.1"
 gem "puma", ">= 5.0"
 
+# Google ログインの ID トークン（JWT）の検証（issue #8）。署名の検証は、自作せず、この gem に任せる
+gem "jwt", "~> 3.3"
+
 # Windows には zoneinfo が無いため、tzinfo-data を入れる（docker compose の開発環境では使われない）
 gem "tzinfo-data", platforms: %i[ windows jruby ]
 
@@ -28,4 +31,9 @@ group :development, :test do
 
   # Omakase Ruby styling
   gem "rubocop-rails-omakase", require: false
+end
+
+group :test do
+  # 外部サービス（Google・reCAPTCHA）への HTTP を、テストで差し替える。実際の外部サービスは呼ばない（issue #8）
+  gem "webmock", require: false
 end
