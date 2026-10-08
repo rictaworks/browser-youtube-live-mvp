@@ -6,10 +6,15 @@
 # 出どころ（取得 2026-10-07。WORK/factcheck/20261007_external-facts.md）
 #   Google の OpenID Connect の探索文書: https://accounts.google.com/.well-known/openid-configuration
 #   reCAPTCHA の検証: https://developers.google.com/recaptcha/docs/verify
+#   YouTube Data API（issue #10）: https://developers.google.com/youtube/v3/live/docs
+#   RTMPS の取り込み口: https://developers.google.com/youtube/v3/live/guides/rtmps-ingestion
 shared:
   google_oidc:
     authorization_endpoint: https://accounts.google.com/o/oauth2/v2/auth
+    # トークンの交換と、アクセストークンの更新（YouTube の更新トークン。TokenVault）に使う
     token_endpoint: https://oauth2.googleapis.com/token
+    # トークンの失効（接続の解除。TokenVault）に使う
+    revoke_endpoint: https://oauth2.googleapis.com/revoke
     jwks_uri: https://www.googleapis.com/oauth2/v3/certs
     # ID トークンの iss。Google は 2 つの形のどちらでも発行する（https://developers.google.com/identity/openid-connect/openid-connect）
     issuers:
@@ -28,3 +33,32 @@ shared:
       - dev-user-3
     authorize_path: /api/dev/google/authorize
     code_lifetime_seconds: 300
+  # YouTube Data API の窓口（YouTubeGateway。issue #10）。YouTube への HTTP は、この窓口だけが送る（requirements.md 6.1）
+  youtube:
+    api_base: https://www.googleapis.com/youtube/v3
+    # 配信用ストリームの作成時に付ける名前（利用者の YouTube Studio に表示される。製品名の仮表記。CLAUDE.md の U11）
+    stream_title: Browser Live
+    # 応答の本文の上限（バイト）。既定の ExternalHttp の上限（1 MiB）では、他の予定配信の説明文が長いときの一覧（50 件）が収まらないことがあるため、4 MiB にする
+    max_response_bytes: 4194304
+    # RTMPS の取り込み口の許可（10.1・28.1）。契約 src/contracts/limits.json の rtmps_ingest と同じ値（スペックで一致を検査する）。
+    # 公式に許可ホストの列挙が無い。二次情報（OBS Studio の YouTube RTMPS プリセット）の a.rtmps.youtube.com・b.rtmps.youtube.com から始め、
+    # 最初の実機で、準備の応答（rtmpsIngestionAddress）のホストを採取して確定する
+    rtmps_ingest:
+      scheme: rtmps
+      hosts:
+        - a.rtmps.youtube.com
+        - b.rtmps.youtube.com
+      port: 443
+    # 開発・テストの疑似の取り込み口（契約 dev_ingest）。production では許可されない（IngestDestination が環境で絞る）
+    dev_ingest:
+      scheme: rtmps
+      host: fake-ingest
+      port: 1935
+      allowed_environments:
+        - development
+        - test
+    # 疑似の YouTube（FakeYouTubeGateway。本番では使わない）
+    fake:
+      # 紐づけから、配信がライブになるまでの秒数
+      live_after_seconds: 5
+      channel_title: Fake Channel
