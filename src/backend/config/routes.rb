@@ -19,10 +19,20 @@ Rails.application.routes.draw do
       get "auth/callback", to: "auth#callback", as: :auth_callback
       post "auth/logout", to: "auth#logout", as: :auth_logout
 
+      # YouTube 接続（issue #11）。段階的な認可: 利用者が「YouTube を接続」を操作した時点で、初めて YouTube の権限を要求する。
+      # 開始はログイン済みのみ、Google からの戻り先は匿名として受け、セッションとの一致を手続きで確かめる（コントローラが宣言）
+      post "youtube/connect/start", to: "youtube#connect_start", as: :youtube_connect_start
+      get "youtube/connect/callback", to: "youtube#connect_callback", as: :youtube_connect_callback
+      post "youtube/recheck", to: "youtube#recheck", as: :youtube_recheck
+
       # 疑似の Google の画面（issue #8）。開発・テストのみ。本番では経路を描かない（存在しない /api の経路として 404 not_found）。
       # 疑似を使う環境かどうかは、外部サービスの実装の選択と同じ環境の判定（AppEnvironment#external_services）で決める
       if AppEnvironment.current.external_services == :fake
         get "dev/google/authorize", to: "/dev/google#authorize", as: :dev_google_authorize
+
+        # YouTube 接続の同意画面と選択（issue #11）。FakeGoogleOidc::CONNECT_AUTHORIZE_PATH が指す経路
+        get "dev/google/connect", to: "/dev/google_connect#consent", as: :dev_google_connect
+        get "dev/google/connect/choose", to: "/dev/google_connect#choose", as: :dev_google_connect_choose
       end
 
       # 存在しない /api の経路。BFF の確認・CSRF の検査のあと、404 not_found（JSON）

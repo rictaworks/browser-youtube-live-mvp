@@ -8,6 +8,15 @@ require "jwt"
 #                      PKCE（code_challenge_method=S256）・state・nonce・redirect_uri
 #   authenticate       認可コードをトークンへ交換し（client_secret と PKCE の検証子を送る）、ID トークンを検証して、sub を返す
 #
+# YouTube の接続（段階的な認可。issue #11。requirements.md 7.2・23.1）。ログインとは別の認可で、利用者が「YouTube を接続」を操作した時点で要求する
+#   youtube_authorization_url  YouTube の認可 URL。スコープは youtube の 1 種のみ（設定の youtube_scope）・response_type=code・PKCE（S256）・state・
+#                              redirect_uri・access_type=offline（更新トークンを受け取る）・prompt=consent（接続のたびに同意画面を表示する）・
+#                              login_hint（ログイン中の Google の識別子 sub。接続先のチャンネルは、同意画面で利用者が選ぶ）。
+#                              include_granted_scopes と nonce は付けない（過去の付与を混ぜない・ID トークンを使わない）
+#   exchange_youtube_code      認可コードをトークンへ交換し、OAuthGrant（アクセストークン・更新トークン・付与されたスコープ）を返す。ID トークンは要らない。
+#                              更新トークンが無い・youtube のスコープが無い応答は、例外にせず、そのまま返す（判定は YouTubeConnectService）
+#   revoke                     受け取ったトークンの失効（接続が成立しなかったとき。GoogleTokenClient#revoke に任せる）
+#
 # ID トークンの検証は、jwt gem に任せる（署名の検証を自作しない）。
 #   署名        Google の公開鍵（JWKS。GoogleJwksCache がキャッシュし、kid で選ぶ）。アルゴリズムは RS256 だけ（none・HS256 への取り違えを許さない）
 #   iss・aud    設定の iss（2 つの形）・クライアント ID。aud が複数なら、azp がクライアント ID
@@ -16,11 +25,14 @@ require "jwt"
 #   exp  now 以前（now と同じ時刻を含む）は期限切れ。 iat  now より 60 秒を超えて先なら拒否（時計のずれ）
 #   nonce  bl_oauth の値と一致（定数時間で比較）。 sub  ASCII の表示できる文字の 1〜255 文字
 #
-# 失敗は GoogleOidc::AuthenticationFailed（理由の符号だけ）。アクセストークンは取り出さない・保持しない。メール・氏名などの claims も
+# 失敗は GoogleOidc::AuthenticationFailed（理由の符号だけ）。ログインでは、アクセストークンは取り出さない・保持しない。メール・氏名などの claims も
 # 取り出さない。コード・検証子・秘密値・トークン・sub を、ログ・例外に出さない。通信は ExternalHttp（接続 3 秒・読み取り 5 秒・リダイレクトを追わない）。
 class GoogleOidcClient
   SCOPE = "openid".freeze
   CODE_CHALLENGE_METHOD = "S256".freeze
+  # YouTube 接続の認可のパラメータ（7.2）。更新トークンを受け取り、接続のたびに同意画面を表示する
+  YOUTUBE_ACCESS_TYPE = "offline".freeze
+  YOUTUBE_PROMPT = "consent".freeze
   ALGORITHMS = %w[ RS256 ].freeze
   REQUIRED_CLAIMS = %w[ iss aud sub exp iat nonce ].freeze
   # iat が now より先でもよい範囲（秒。時計のずれ）
@@ -36,16 +48,21 @@ class GoogleOidcClient
 
   # 公開鍵のキャッシュ（プロセスで共有する。ExternalServices が渡す）
   attr_reader :jwks_cache
+  # YouTube の接続で要求するスコープ（設定）。付与されたスコープとの比べ（接続の判定）に使う
+  attr_reader :youtube_scope
 
   def initialize(client_id:, client_secret:, http:, endpoints:, jwks_cache:, logger: Rails.logger)
     @client_id = non_blank!(client_id, "client_id")
     @client_secret = non_blank!(client_secret, "client_secret")
     @authorization_endpoint = https_endpoint!(endpoints, :authorization_endpoint)
     @token_endpoint = https_endpoint!(endpoints, :token_endpoint)
+    @youtube_scope = non_blank!(endpoints[:youtube_scope], "youtube_scope").dup.freeze
     @issuers = issuers!(endpoints)
     @http = http
     @jwks_cache = jwks_cache
     @logger = logger
+    # トークンの失効は、GoogleTokenClient に任せる（分類・ログを重ねて作らない）
+    @token_client = GoogleTokenClient.new(client_id: client_id, client_secret: client_secret, http: http, endpoints: endpoints, logger: logger)
   end
 
   # Google の認可 URL（スコープは openid のみ）
@@ -81,6 +98,43 @@ class GoogleOidcClient
     raise
   end
 
+  # YouTube の認可 URL（スコープは youtube の 1 種のみ。7.2）。login_hint は、ログイン中の Google の識別子（sub）
+  def youtube_authorization_url(state:, code_challenge:, redirect_uri:, login_hint:)
+    uri = URI.parse(@authorization_endpoint)
+    uri.query = URI.encode_www_form(
+      client_id: @client_id,
+      redirect_uri: non_blank!(redirect_uri, "redirect_uri"),
+      response_type: "code",
+      scope: @youtube_scope,
+      state: non_blank!(state, "state"),
+      code_challenge: non_blank!(code_challenge, "code_challenge"),
+      code_challenge_method: CODE_CHALLENGE_METHOD,
+      access_type: YOUTUBE_ACCESS_TYPE,
+      prompt: YOUTUBE_PROMPT,
+      login_hint: non_blank!(login_hint, "login_hint")
+    )
+    uri.to_s
+  end
+
+  # YouTube の認可コードを交換し、OAuthGrant を返す。失敗は GoogleOidc::AuthenticationFailed。
+  # 更新トークンが無い・youtube のスコープが付与されていない応答は、失敗にしない（接続の判定は、呼び出し側）
+  def exchange_youtube_code(code:, code_verifier:, redirect_uri:)
+    non_blank!(code, "code")
+    non_blank!(code_verifier, "code_verifier")
+    non_blank!(redirect_uri, "redirect_uri")
+
+    grant_from(request_tokens(code, code_verifier, redirect_uri))
+  rescue GoogleOidc::AuthenticationFailed => failure
+    @logger.warn("#{LOG_TAG} youtube code exchange failed reason=#{failure.reason}")
+    raise
+  end
+
+  # 受け取ったトークン（更新トークン、無ければアクセストークン）を失効させる。:revoked・:already_invalid を返す。
+  # 失敗は YouTubeErrors::TokenTemporarilyUnavailable・UnexpectedResponse（GoogleTokenClient#revoke と同じ）
+  def revoke(token:)
+    @token_client.revoke(token: token)
+  end
+
   # クライアント ID・秘密値を出さない
   def inspect
     "#<#{self.class.name}>"
@@ -92,6 +146,17 @@ class GoogleOidcClient
 
   # トークンエンドポイントへ交換を依頼し、ID トークンの文字列を返す。アクセストークンは取り出さない
   def exchange_code(code, code_verifier, redirect_uri)
+    body = request_tokens(code, code_verifier, redirect_uri)
+
+    id_token = body["id_token"]
+    failed!(:id_token_missing) unless id_token.is_a?(String) && !id_token.empty?
+
+    id_token
+  end
+
+  # トークンエンドポイントへ認可コードの交換を依頼し、応答の本文（オブジェクト）を返す。
+  # 200 以外は token_exchange_rejected、通信の失敗は token_endpoint_unreachable、解釈できない応答は token_response_invalid
+  def request_tokens(code, code_verifier, redirect_uri)
     response = @http.post_form(
       @token_endpoint,
       form: {
@@ -104,12 +169,23 @@ class GoogleOidcClient
     body = response.json
     failed!(:token_response_invalid) unless body.is_a?(Hash)
 
-    id_token = body["id_token"]
-    failed!(:id_token_missing) unless id_token.is_a?(String) && !id_token.empty?
-
-    id_token
+    body
   rescue ExternalHttp::Failure => failure
     failed!(UNREACHABLE_CAUSES.include?(failure.reason) ? :token_endpoint_unreachable : :token_response_invalid)
+  end
+
+  # YouTube の交換の応答 -> OAuthGrant。形が違えば token_response_invalid（値は、例外・ログに載せない）。
+  # scope が無い応答は、スコープなし（付与を確認できないので、youtube が付与されたとしない）
+  def grant_from(body)
+    scope = body["scope"]
+    failed!(:token_response_invalid) unless scope.nil? || scope.is_a?(String)
+
+    OAuthGrant.new(
+      access_token: body["access_token"], refresh_token: body["refresh_token"],
+      scopes: scope.to_s.split, expires_in: body["expires_in"]
+    )
+  rescue ArgumentError
+    failed!(:token_response_invalid)
   end
 
   def rejected!(status)

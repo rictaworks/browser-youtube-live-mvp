@@ -13,8 +13,11 @@ shared:
     authorization_endpoint: https://accounts.google.com/o/oauth2/v2/auth
     # トークンの交換と、アクセストークンの更新（YouTube の更新トークン。TokenVault）に使う
     token_endpoint: https://oauth2.googleapis.com/token
-    # トークンの失効（接続の解除。TokenVault）に使う
+    # トークンの失効（接続の解除。TokenVault。YouTube 接続が成立しなかったときの、受け取ったトークンの失効）に使う
     revoke_endpoint: https://oauth2.googleapis.com/revoke
+    # YouTube の接続（段階的な認可。issue #11）で要求するスコープ。1 種のみ（requirements.md 7.2）。
+    # ログインの openid とは別に、利用者が「YouTube を接続」を操作した時点で初めて要求する
+    youtube_scope: https://www.googleapis.com/auth/youtube
     jwks_uri: https://www.googleapis.com/oauth2/v3/certs
     # ID トークンの iss。Google は 2 つの形のどちらでも発行する（https://developers.google.com/identity/openid-connect/openid-connect）
     issuers:

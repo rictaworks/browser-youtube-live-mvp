@@ -1,0 +1,88 @@
+# 変異の一覧。形式: <重要度>|<変異の名前>|<実行するスペック（空白区切り）>
+#   重要度  key = 既定で実行する（YouTube 接続の安全に直結するもの） / all = MUTATION_SET=all のときだけ実行する
+# 各変異は、mutations.rb の mutate_<名前>。アプリケーションの 1 か所を壊して、スペックが落ちることを確かめる
+# （最初の失敗で止める --fail-fast で実行するので、落ちる変異は短時間で終わる。落ちない変異は、挙げたスペックの全件を実行する）
+#
+# --- YouTubeConnectService: 認可の完了（state・アカウント・error・権限・更新トークン） ---
+key|service_state_unchecked|spec/services/youtube_connect_service_complete_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+key|service_account_unchecked|spec/services/youtube_connect_service_complete_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+key|service_error_param_ignored|spec/services/youtube_connect_service_complete_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+key|service_denied_as_unverifiable|spec/services/youtube_connect_service_complete_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+key|service_scope_unchecked|spec/services/youtube_connect_service_complete_spec.rb
+key|service_refresh_token_unchecked|spec/services/youtube_connect_service_complete_spec.rb
+key|service_broadcast_in_progress_ignored|spec/services/youtube_connect_service_complete_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+# --- YouTubeConnectService: 不成立のトークンの扱い・成立の保存 ---
+key|service_revoke_with_existing|spec/services/youtube_connect_service_complete_spec.rb
+key|service_revoke_never|spec/services/youtube_connect_service_complete_spec.rb
+key|service_failure_stores_token|spec/services/youtube_connect_service_complete_spec.rb
+key|service_stream_not_discarded|spec/services/youtube_connect_service_complete_spec.rb
+key|service_state_not_applied|spec/services/youtube_connect_service_complete_spec.rb spec/services/youtube_connect_service_recheck_spec.rb
+key|service_not_atomic|spec/services/youtube_connect_service_complete_spec.rb
+key|service_lock_before_store|spec/services/youtube_connect_service_concurrency_spec.rb
+# --- YouTubeConnectService: 確認の失敗の扱い・再確認・チャンネル名 ---
+key|service_disposition_ignored|spec/services/youtube_connect_service_complete_spec.rb spec/services/youtube_connect_service_recheck_spec.rb
+key|service_recheck_probes_revoked|spec/services/youtube_connect_service_recheck_spec.rb spec/requests/api/youtube_recheck_spec.rb
+key|service_channel_title_uncached|spec/services/youtube_connect_service_recheck_spec.rb
+key|service_blank_title_unchecked|spec/services/youtube_connect_service_complete_spec.rb spec/services/youtube_connect_service_recheck_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+key|service_unsaved_token_kept_on_error|spec/services/youtube_connect_service_complete_spec.rb
+# --- ChannelNameCache・RecheckGate・RateLimiter#peek ---
+key|cache_ttl_ignored|spec/services/channel_name_cache_spec.rb
+key|cache_ttl_off_by_one|spec/services/channel_name_cache_spec.rb
+key|cache_shared_key|spec/services/channel_name_cache_spec.rb
+key|cache_uses_rails_cache|spec/services/channel_name_cache_spec.rb
+key|gate_consumes|spec/services/recheck_gate_spec.rb
+key|gate_quota_ignored|spec/services/recheck_gate_spec.rb
+key|peek_consumes|spec/services/rate_limiter_peek_spec.rb spec/services/recheck_gate_spec.rb
+key|cache_failure_not_cached|spec/services/channel_name_cache_spec.rb spec/services/youtube_connect_service_recheck_spec.rb
+key|cache_failure_ttl_too_long|spec/services/channel_name_cache_spec.rb
+# --- Api::YoutubeController ---
+key|controller_rate_limit_skipped|spec/requests/api/youtube_connect_start_spec.rb spec/requests/api/youtube_recheck_spec.rb
+key|controller_bot_skipped|spec/requests/api/youtube_connect_start_spec.rb
+key|controller_bot_indeterminate_passes|spec/requests/api/youtube_connect_start_spec.rb
+key|controller_start_ignores_broadcast|spec/requests/api/youtube_connect_start_spec.rb
+key|controller_oauth_cookie_kept|spec/requests/api/youtube_connect_callback_spec.rb
+key|controller_title_exposed|spec/requests/api/youtube_recheck_spec.rb
+key|controller_callback_redirect_backend_host|spec/requests/api/youtube_connect_callback_spec.rb
+key|controller_anonymous_event_recorded|spec/requests/api/youtube_connect_callback_spec.rb
+key|controller_event_without_flow|spec/requests/api/youtube_connect_callback_spec.rb
+# --- GoogleOidcClient（実物）・FakeGoogleOidc ---
+key|oidc_include_granted_scopes|spec/gateways/google_oidc_client_youtube_spec.rb
+key|oidc_scope_widened|spec/gateways/google_oidc_client_youtube_spec.rb
+key|oidc_verifier_not_sent|spec/gateways/google_oidc_client_youtube_spec.rb spec/requests/api/youtube_connect_live_spec.rb
+key|oidc_secret_not_sent|spec/gateways/google_oidc_client_youtube_spec.rb spec/requests/api/youtube_connect_live_spec.rb
+key|fake_pkce_unchecked|spec/gateways/fake_google_oidc_youtube_spec.rb
+# --- 疑似の同意画面 ---
+key|dev_open_redirect|spec/requests/dev/google_connect_spec.rb
+# --- ログのフィルタ ---
+key|filter_login_hint_missing|spec/config/login_hint_filter_spec.rb spec/requests/dev/google_connect_spec.rb
+# --- 以下は MUTATION_SET=all のときだけ ---
+all|service_code_length_unchecked|spec/services/youtube_connect_service_complete_spec.rb spec/requests/api/youtube_connect_callback_spec.rb
+all|service_revokes_access_token_only|spec/services/youtube_connect_service_complete_spec.rb
+all|service_probe_inside_transaction|spec/services/youtube_connect_service_complete_spec.rb
+all|service_channel_title_revoked_probed|spec/services/youtube_connect_service_recheck_spec.rb
+all|service_channel_title_changes_state|spec/services/youtube_connect_service_recheck_spec.rb
+all|cache_read_extends_life|spec/services/channel_name_cache_spec.rb
+all|cache_ttl_max_unchecked|spec/services/channel_name_cache_spec.rb
+all|cache_logs_title|spec/services/channel_name_cache_spec.rb
+all|cache_no_single_flight|spec/services/channel_name_cache_spec.rb
+all|gate_fixed_offset|spec/services/recheck_gate_spec.rb
+all|gate_earliest_wins|spec/services/recheck_gate_spec.rb
+all|controller_event_not_recorded|spec/requests/api/youtube_connect_callback_spec.rb
+all|controller_failure_recorded_as_completed|spec/requests/api/youtube_connect_callback_spec.rb
+all|controller_can_recheck_at_missing|spec/requests/api/youtube_recheck_spec.rb
+all|oidc_prompt_missing|spec/gateways/google_oidc_client_youtube_spec.rb
+all|oidc_access_type_missing|spec/gateways/google_oidc_client_youtube_spec.rb
+all|oidc_nonce_added|spec/gateways/google_oidc_client_youtube_spec.rb
+all|oidc_login_hint_missing|spec/gateways/google_oidc_client_youtube_spec.rb
+all|oidc_revoke_noop|spec/gateways/google_oidc_client_youtube_spec.rb
+all|oidc_missing_scope_assumed_granted|spec/gateways/google_oidc_client_youtube_spec.rb
+all|fake_redirect_unchecked|spec/gateways/fake_google_oidc_youtube_spec.rb
+all|fake_expiry_unchecked|spec/gateways/fake_google_oidc_youtube_spec.rb
+all|dev_consent_unvalidated|spec/requests/dev/google_connect_spec.rb
+all|dev_forbidden_fields_allowed|spec/requests/dev/google_connect_spec.rb
+all|dev_choose_no_injection|spec/requests/dev/google_connect_spec.rb
+all|dev_available_with_real_oidc|spec/requests/dev/google_connect_spec.rb
+all|controller_event_account_unchecked|spec/requests/api/youtube_connect_callback_spec.rb
+all|cache_entry_pretty_print_default|spec/services/channel_name_cache_spec.rb
+all|service_start_pretty_print_default|spec/services/youtube_connect_service_start_spec.rb
+all|service_verdict_pretty_print_default|spec/services/youtube_connect_service_complete_spec.rb

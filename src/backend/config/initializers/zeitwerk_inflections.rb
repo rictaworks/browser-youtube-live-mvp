@@ -1,6 +1,6 @@
 # Be sure to restart your server when you modify this file.
 
-# Zeitwerk の語の綴りの個別の指定（ファイル名 -> 定数名）。issue #10 の YouTube 連携の窓口。
+# Zeitwerk の語の綴りの個別の指定（ファイル名 -> 定数名）。issue #10 の YouTube 連携の窓口と、issue #11 の YouTube 接続のサービス。
 #
 # グローバルな inflect.acronym "YouTube" は足さない。足すと、既存の定数 YoutubeConnection（綴りはこのまま。
 # ファイル youtube_connection.rb）の綴りまで変わってしまう。そこで、窓口の定数だけを、ファイル名の単位で指定する。
@@ -14,6 +14,7 @@ Rails.autoloaders.each do |autoloader|
     "fake_youtube_gateway" => "FakeYouTubeGateway",
     "youtube_errors" => "YouTubeErrors",
     "youtube_status" => "YouTubeStatus",
-    "youtube_services" => "YouTubeServices"
+    "youtube_services" => "YouTubeServices",
+    "youtube_connect_service" => "YouTubeConnectService"
   )
 end

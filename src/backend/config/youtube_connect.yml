@@ -1,0 +1,8 @@
+# YouTube 接続（issue #11）の設定値。コードに直書きしない。Rails.application.config_for(:youtube_connect) で読む（ChannelNameCache）。
+# 環境ごとの違いは無い（shared のみ）。資格情報・トークンは、ここに書かない。
+shared:
+  # チャンネル名の取得に失敗したとき（チャンネルが無い・一時的な失敗・共通枠の枯渇など）に、その結果をメモリに置く秒数（否定キャッシュ）。
+  # この間、同じアカウントのチャンネル名の取得では、YouTube を呼ばない。失敗した呼び出しも、共通枠（全員で共有する 500 ユニット）から
+  # 1〜2 ユニットを消費するため、障害中の再読み込みや、チャンネルを削除した利用者の連打が、共通枠を使い切らないようにする上限。
+  # 成功したチャンネル名の保持（最長 10 分。契約 retention.channel_title_memory_max_minutes）より短くする（1 以上 600 以下）。永続化しない。
+  channel_title_failure_cache_seconds: 60

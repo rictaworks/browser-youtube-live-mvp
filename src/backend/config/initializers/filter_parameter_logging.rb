@@ -14,6 +14,8 @@
 #   "x-bff-secret"・"x-relay-secret"  ヘッダの名前（上の :secret と重なるが、名前を明示する）
 #   :nonce・:code_verifier  OAuth の途中状態（nonce・PKCE の検証子）
 #   :google_sub・:sub_digest  Google の利用者識別子と、その要約値（20.1・28.2）
+#   :login_hint     YouTube 接続の認可の要求の login_hint（ログイン中の Google の識別子 sub。7.2）。本番では Google へ渡すだけだが、開発の疑似の
+#                   同意画面は、認可の要求のパラメータを受けるので、要求のログに値が出る（issue #11）
 # 認可コード（code）と state は、短い名前なので、完全一致だけを伏せる（reason_code・error_code など、デバッグに要るものを巻き込まない）。
 # ログへ IP アドレスを出さないことは、lib/request_logger.rb（要求の開始のログ）が担う。
 oauth_state_filter = /\Astate\z/i
@@ -23,7 +25,7 @@ Rails.application.config.filter_parameters += [
   :title, :ticket, /stream.?(name|key)/i,
   /\Acode\z/i, oauth_state_filter, :nonce, :code_verifier,
   :authorization, :cookie, "x-bff-secret", "x-relay-secret",
-  :google_sub, :sub_digest
+  :google_sub, :sub_digest, :login_hint
 ]
 
 # Active Record の filter_attributes（モデルの inspect・SQL のログのバインド値の伏せ字）は、filter_parameters から作られる。

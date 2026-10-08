@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title><%= t("dev.google.authorize.title") %></title>
+<style>
+body { font-family: sans-serif; margin: 2rem; }
+dl { margin: 1rem 0; }
+dt { font-weight: bold; }
+dd { margin: 0 0 0.5rem 0; overflow-wrap: anywhere; }
+li { margin: 1rem 0; }
+a { font-size: 1.25rem; }
+</style>
+</head>
+<body>
+<h1><%= t("dev.google.authorize.title") %></h1>
+<dl>
+<dt>scope</dt>
+<dd><%= @scope %></dd>
+<dt>login_hint</dt>
+<dd><%= @login_hint %></dd>
+</dl>
+<ul>
+<% @choices.each do |choice| %>
+<li><a href="<%= choice[:href] %>"><%= choice[:label] %></a></li>
+<% end %>
+</ul>
+</body>
+</html>

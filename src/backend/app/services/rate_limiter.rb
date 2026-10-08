@@ -79,18 +79,31 @@ class RateLimiter
       evaluated = rules.map { |rule| [ rule, purged_times(rule, now) ] }
       denied = evaluated.select { |rule, times| times.size >= rule.limit }
 
-      if denied.empty?
-        evaluated.each { |rule, times| record(rule, times, now) }
-        Result.new(allowed: true, retry_at: nil)
-      else
-        Result.new(allowed: false, retry_at: denied.map { |rule, times| times.min + rule.window_seconds }.max)
-      end
+      evaluated.each { |rule, times| record(rule, times, now) } if denied.empty?
+      verdict(denied)
     end
   end
 
   # 名前付きの方針（RateLimitPolicy）を、対象（IP・アカウント識別子）ごとの鍵で評価する
   def check(policy, subject)
     hit_all(policy.rules_for(subject))
+  end
+
+  # hit_all と同じ規則で評価するが、計数しない（issue #11）。次に許可される時刻（拒否のときの retry_at）を、消費せずに知るために使う
+  # （再確認の can_recheck_at）。鍵を作らず、計数を変えず、窓の外の計数も捨てない。
+  def peek_all(rules)
+    validate_rules!(rules)
+
+    @mutex.synchronize do
+      now = current_time
+      evaluated = rules.map { |rule| [ rule, active_times(rule, now) ] }
+      verdict(evaluated.select { |rule, times| times.size >= rule.limit })
+    end
+  end
+
+  # peek_all の、名前付きの方針版（check の、計数しない版）
+  def peek(policy, subject)
+    peek_all(policy.rules_for(subject))
   end
 
   # 持っている鍵の数
@@ -125,6 +138,23 @@ class RateLimiter
     cutoff = now - rule.window_seconds
     entry.times.reject! { |time| time <= cutoff }
     entry.times
+  end
+
+  # 窓の内の許可の時刻（鍵が無ければ、空の配列）。purged_times と違い、何も書き換えない
+  def active_times(rule, now)
+    entry = @entries[rule.key]
+    return [] if entry.nil?
+
+    cutoff = now - rule.window_seconds
+    entry.times.select { |time| time > cutoff }
+  end
+
+  # 拒否した規則（[規則, 窓の内の許可の時刻]）の組から、結果を作る。無ければ許可。あれば拒否で、
+  # retry_at は、拒否した規則のうち、最も遅い時刻（それぞれ、窓の内の最も古い許可が、窓から外れる時刻）
+  def verdict(denied)
+    return Result.new(allowed: true, retry_at: nil) if denied.empty?
+
+    Result.new(allowed: false, retry_at: denied.map { |rule, times| times.min + rule.window_seconds }.max)
   end
 
   # 許可を計数する。鍵を、末尾（最も新しく使われた位置）へ移し、鍵の数が上限を超えたら、先頭（最も古く使われた鍵）から捨てる
