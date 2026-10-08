@@ -17,11 +17,12 @@ RSpec.describe ExternalServices do
   describe ".config（config/external_services.yml）" do
     let(:config) { described_class.config }
 
-    # issue #10 が、トークンの失効のエンドポイント（revoke_endpoint）と、YouTube の窓口の設定（youtube）を足した
+    # issue #10 が、トークンの失効のエンドポイント（revoke_endpoint）と、YouTube の窓口の設定（youtube）を足した。
+    # issue #11 が、YouTube 接続（段階的な認可）で要求するスコープ（youtube_scope）を足した
     it "Google の OIDC・reCAPTCHA・疑似の Google・YouTube の窓口の設定を持つ" do
       expect(config.keys).to match_array(%i[ google_oidc recaptcha fake_google youtube ])
       expect(config.fetch(:google_oidc).keys).to match_array(
-        %i[ authorization_endpoint token_endpoint revoke_endpoint jwks_uri issuers jwks_cache_seconds jwks_min_refetch_seconds ]
+        %i[ authorization_endpoint token_endpoint revoke_endpoint youtube_scope jwks_uri issuers jwks_cache_seconds jwks_min_refetch_seconds ]
       )
       expect(config.fetch(:recaptcha).keys).to eq(%i[ siteverify_endpoint ])
       expect(config.fetch(:fake_google).keys).to match_array(%i[ accounts authorize_path code_lifetime_seconds ])
