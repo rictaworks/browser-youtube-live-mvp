@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -11,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/sirupsen/logrus"
+
 	"github.com/rictaworks/browser-youtube-live-mvp/relay/internal/appenv"
 	"github.com/rictaworks/browser-youtube-live-mvp/relay/internal/config"
+	"github.com/rictaworks/browser-youtube-live-mvp/relay/internal/server"
 )
 
 const (
@@ -94,6 +98,41 @@ func TestNewApp(t *testing.T) {
 			}
 			if got.server == nil {
 				t.Error("server = nil; want the wired relay")
+			}
+		})
+	}
+}
+
+// 標準出力・標準エラーの出力先は必須。nil を、捨てる出力先へ黙って差し替えない（記録が消えて、異常に気づけなくなる）。
+// 失敗した起動が、外部のライブラリ（go-rtmp）の記録の向きを、変えたまま残さない
+func TestNewAppRequiresTheOutputsAndNeverSubstitutesThem(t *testing.T) {
+	cases := []struct {
+		name           string
+		stdout, stderr io.Writer
+	}{
+		{"標準出力が無い", nil, io.Discard},
+		{"標準エラーが無い", io.Discard, nil},
+		{"どちらも無い", nil, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			std := logrus.StandardLogger()
+			var original bytes.Buffer
+			previousOut := std.Out
+			std.SetOutput(&original)
+			t.Cleanup(func() { std.SetOutput(previousOut) })
+
+			got, err := newApp(lookupFrom(fullEnv("test", "")), tc.stdout, tc.stderr)
+			if err == nil {
+				got.close()
+				t.Fatalf("newApp() = %+v, nil; want an error when an output is missing", got)
+			}
+			if !errors.Is(err, server.ErrInvalidDeps) {
+				t.Errorf("newApp() error = %v; want server.ErrInvalidDeps", err)
+			}
+			logrus.Info("after the failed start")
+			if !strings.Contains(original.String(), "after the failed start") {
+				t.Errorf("logrus lost its own output after a failed start: %q", original.String())
 			}
 		})
 	}

@@ -2,6 +2,7 @@ package wsapi
 
 import (
 	"errors"
+	"log/slog"
 	"testing"
 	"time"
 
@@ -9,7 +10,8 @@ import (
 )
 
 func TestOptionsDefaultsFollowTheContract(t *testing.T) {
-	got, err := Options{Clock: newFakeClock()}.normalized()
+	logger := slog.New(slog.DiscardHandler)
+	got, err := Options{Clock: newFakeClock(), Logger: logger}.normalized()
 	if err != nil {
 		t.Fatalf("normalized() error = %v; want nil", err)
 	}
@@ -38,8 +40,8 @@ func TestOptionsDefaultsFollowTheContract(t *testing.T) {
 	if got.MaxConnections != DefaultMaxConnections || got.SendQueueLimit != DefaultSendQueueLimit {
 		t.Errorf("MaxConnections = %d, SendQueueLimit = %d; want the defaults", got.MaxConnections, got.SendQueueLimit)
 	}
-	if got.Logger == nil {
-		t.Error("Logger = nil; want a logger that discards")
+	if got.Logger != logger {
+		t.Error("Logger was replaced; want the logger that was passed (it is a required dependency, never defaulted)")
 	}
 	if got.IdleTimeout <= got.PingInterval {
 		t.Errorf("IdleTimeout %v must exceed PingInterval %v", got.IdleTimeout, got.PingInterval)
@@ -48,7 +50,7 @@ func TestOptionsDefaultsFollowTheContract(t *testing.T) {
 
 func TestOptionsKeepTheValuesThatAreSet(t *testing.T) {
 	opts := Options{
-		Clock: newFakeClock(), MaxMessageBytes: 1024, MaxConnections: 3, SendQueueLimit: 4,
+		Clock: newFakeClock(), Logger: slog.New(slog.DiscardHandler), MaxMessageBytes: 1024, MaxConnections: 3, SendQueueLimit: 4,
 		PingInterval: time.Second, IdleTimeout: 3 * time.Second, WriteTimeout: 2 * time.Second, LingerTimeout: time.Second,
 	}
 	got, err := opts.normalized()
@@ -63,22 +65,25 @@ func TestOptionsKeepTheValuesThatAreSet(t *testing.T) {
 
 func TestOptionsRejectInvalidValues(t *testing.T) {
 	clock := newFakeClock()
+	logger := slog.New(slog.DiscardHandler)
 	cases := []struct {
 		name string
 		opts Options
 		want error
 	}{
-		{"時計が無い", Options{}, ErrInvalidDeps},
-		{"メッセージの上限が負", Options{Clock: clock, MaxMessageBytes: -1}, ErrInvalidOptions},
-		{"メッセージの上限が契約を超える", Options{Clock: clock, MaxMessageBytes: contract.WSFrameMaxMessageBytes + 1}, ErrInvalidOptions},
-		{"メッセージの上限がヘッダより小さい", Options{Clock: clock, MaxMessageBytes: contract.WSFrameHeaderBytes - 1}, ErrInvalidOptions},
-		{"接続数の上限が負", Options{Clock: clock, MaxConnections: -1}, ErrInvalidOptions},
-		{"送信待ちの上限が負", Options{Clock: clock, SendQueueLimit: -1}, ErrInvalidOptions},
-		{"ping の間隔が負", Options{Clock: clock, PingInterval: -time.Second}, ErrInvalidOptions},
-		{"無通信の期限が負", Options{Clock: clock, IdleTimeout: -time.Second}, ErrInvalidOptions},
-		{"書き込みの期限が負", Options{Clock: clock, WriteTimeout: -time.Second}, ErrInvalidOptions},
-		{"切断の待ちが負", Options{Clock: clock, LingerTimeout: -time.Second}, ErrInvalidOptions},
-		{"無通信の期限が ping の間隔以下", Options{Clock: clock, PingInterval: 10 * time.Second, IdleTimeout: 10 * time.Second}, ErrInvalidOptions},
+		{"時計もロガーも無い", Options{}, ErrInvalidDeps},
+		{"時計が無い", Options{Logger: logger}, ErrInvalidDeps},
+		{"ロガーが無い（捨てる出力先へ差し替えない）", Options{Clock: clock}, ErrInvalidDeps},
+		{"メッセージの上限が負", Options{Clock: clock, Logger: logger, MaxMessageBytes: -1}, ErrInvalidOptions},
+		{"メッセージの上限が契約を超える", Options{Clock: clock, Logger: logger, MaxMessageBytes: contract.WSFrameMaxMessageBytes + 1}, ErrInvalidOptions},
+		{"メッセージの上限がヘッダより小さい", Options{Clock: clock, Logger: logger, MaxMessageBytes: contract.WSFrameHeaderBytes - 1}, ErrInvalidOptions},
+		{"接続数の上限が負", Options{Clock: clock, Logger: logger, MaxConnections: -1}, ErrInvalidOptions},
+		{"送信待ちの上限が負", Options{Clock: clock, Logger: logger, SendQueueLimit: -1}, ErrInvalidOptions},
+		{"ping の間隔が負", Options{Clock: clock, Logger: logger, PingInterval: -time.Second}, ErrInvalidOptions},
+		{"無通信の期限が負", Options{Clock: clock, Logger: logger, IdleTimeout: -time.Second}, ErrInvalidOptions},
+		{"書き込みの期限が負", Options{Clock: clock, Logger: logger, WriteTimeout: -time.Second}, ErrInvalidOptions},
+		{"切断の待ちが負", Options{Clock: clock, Logger: logger, LingerTimeout: -time.Second}, ErrInvalidOptions},
+		{"無通信の期限が ping の間隔以下", Options{Clock: clock, Logger: logger, PingInterval: 10 * time.Second, IdleTimeout: 10 * time.Second}, ErrInvalidOptions},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

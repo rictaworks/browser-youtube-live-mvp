@@ -3,6 +3,7 @@ package server
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -207,5 +208,54 @@ func TestAccessLogOfTheWebSocketPathOmitsQueryAndClientIP(t *testing.T) {
 		if strings.Contains(logged, secret) {
 			t.Errorf("access log must not contain %q: %q", secret, logged)
 		}
+	}
+}
+
+// 記録の出力先（アクセスログ・パニックの記録）は必須。nil を、捨てる出力先へ黙って差し替えない（パニックの記録が消えると、
+// 500 の原因を追えなくなる）
+func TestNewRouterRequiresTheLogOutputs(t *testing.T) {
+	cases := []struct {
+		name                string
+		accessLog, errorLog io.Writer
+	}{
+		{"アクセスログが無い", nil, io.Discard},
+		{"パニックの記録が無い", io.Discard, nil},
+		{"どちらも無い", nil, nil},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			router, err := NewRouter(tc.accessLog, tc.errorLog, nil)
+			if router != nil {
+				t.Fatal("NewRouter() returned a router although a log output is missing")
+			}
+			if !errors.Is(err, ErrInvalidDeps) {
+				t.Fatalf("NewRouter() error = %v; want ErrInvalidDeps", err)
+			}
+		})
+	}
+}
+
+// パニックの記録に書く経路は、クライアントが決める文字列。引用符つきで書き、改行などの制御文字で、記録の行を偽造させない
+func TestRecoveryLogQuotesTheRequestPath(t *testing.T) {
+	var errorLog bytes.Buffer
+	router := newTestRouter(t, io.Discard, &errorLog)
+	router.GET("/boom/:name", func(*gin.Context) { panic("dummy panic reason") })
+
+	req := httptest.NewRequest(http.MethodGet, "/boom/a%0Arelay:%20forged%20line", nil)
+	rec := httptest.NewRecorder()
+	router.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("status = %d; want 500", rec.Code)
+	}
+	logged := errorLog.String()
+	if strings.Contains(logged, "\nrelay: forged line") {
+		t.Errorf("the path injected a line into the error log:\n%s", logged)
+	}
+	if first, _, _ := strings.Cut(logged, "\n"); !strings.Contains(first, "forged line") {
+		t.Errorf("the first line of the record = %q; want the whole path on it, with the newline escaped", first)
+	}
+	if !strings.Contains(logged, `\n`) {
+		t.Errorf("the newline of the path is not escaped in the record:\n%s", logged)
 	}
 }

@@ -21,6 +21,8 @@ REQUIRED = {
         "TestFormattingTheConfigNeverExposesTheSecret",
         "TestVariableNamesMatchRequirements",
         "TestDefaultPortIs3002",
+        # HTTP サーバーの制限（要求ヘッダの読み取り・keep-alive の無通信・ヘッダの大きさ）
+        "TestHTTPServerLimits",
     ],
     "internal/server": [
         # ルーター・ログ・パニックの記録
@@ -31,23 +33,35 @@ REQUIRED = {
         "TestAccessLogOfTheWebSocketPathOmitsQueryAndClientIP",
         "TestRecoveryLogsThePanicTypeWithoutTheValueOrRequestDetails",
         "TestRecoveryKeepsTheMessageOfRuntimeErrors",
+        "TestRecoveryLogQuotesTheRequestPath",
+        # 記録の出力先は必須（nil を、捨てる出力先へ差し替えない）
+        "TestNewRouterRequiresTheLogOutputs",
+        "TestRedirectThirdPartyLogsRequiresALoggerAndChangesNothingWithoutOne",
         # go-rtmp の記録（#19 のレビューの申し送り）
         "TestRedirectThirdPartyLogsRoutesLogrusIntoSlogAndSilencesItsOwnOutput",
         "TestRoutedThirdPartyInfoLinesAreBelowTheProductionLevel",
         "TestRoutedThirdPartyMessagesAreTruncated",
         # 結線・送出先の許可・正常停止
         "TestNewAppRejectsAnInvalidInternalConfigWithoutEchoingIt",
+        "TestNewAppRequiresTheLogOutputsAndNeverSubstitutesThem",
+        "TestAMissingLogOutputIsReportedBeforeAnInvalidConfig",
+        "TestNewAppUsesTheProductionDefaultsForTheClockTheWaiterAndTheHTTPClient",
         "TestDestinationPolicyFollowsTheEnvironment",
         "TestNewAppRefusesAPolicyOverrideInProduction",
         "TestSessionsContextKeepsAReserveForTheEventFlush",
         "TestServeAnswersHealthAndStopsWhenTheContextIsDone",
         "TestServeReturnsAnErrorWhenTheListenerIsBroken",
         "TestShutdownCanBeCalledTwiceAndRefusesNewWebSocketsAtOnce",
+        # HTTP サーバーの制限（Serve が作るサーバーで確かめる）
+        "TestServeBuildsTheHTTPServerWithTheConfiguredLimits",
+        "TestServeRefusesRequestHeadersLargerThanTheLimit",
+        "TestAWebSocketUpgradeWorksThroughTheServedHTTPServer",
         "TestTheAppFormatsWithoutAnySecretOrAddress",
     ],
     ".": [
         # 起動：設定の読み込み・失敗・SIGTERM と SIGINT での正常停止
         "TestNewApp",
+        "TestNewAppRequiresTheOutputsAndNeverSubstitutesThem",
         "TestStartupFailureNamesTheMissingVariablesButNeverShowsValues",
         "TestStartupFailureOfAnInvalidSecretNeverShowsTheValue",
         "TestTheAppServesHealthAndStopsGracefullyOnCancel",
@@ -69,6 +83,8 @@ REQUIRED = {
         "TestReadMessageReadsUpToTheLimit",
         "TestReadMessageReportsReadErrors",
         "TestReadMessageDoesNotAllocateTheLimitUpFront",
+        "TestReadMessageKeepsTheDataAcrossTheGrowthSteps",
+        "TestReadMessageGrowsStraightToTheLimitInTheLastStep",
         # 送信：直列化・上限・優先・ping／pong・閉じ方
         "TestSendWritesBinaryMessagesInOrder",
         "TestSendCopiesTheMessage",
@@ -107,8 +123,10 @@ REQUIRED = {
         "TestTheHandlerShowsNoDetailsWhenFormatted",
         "TestOptionsDefaultsFollowTheContract",
         "TestOptionsRejectInvalidValues",
+        "TestNewHandlerRequiresItsDependencies",
         # 結合：正常な流れ
         "TestAFullBroadcastFromHelloToEnd",
+        "TestTheAccessLogRecords200ForAnEstablishedWebSocketAndTheRefusalStatusOtherwise",
         "TestAResumeHelloToARestartedRelayRebuildsTheSession",
         "TestAStopCommandFromTheApplicationEndsTheBroadcast",
         "TestNoticesFromTheApplicationAreForwardedToTheBrowser",

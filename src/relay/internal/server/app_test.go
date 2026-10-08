@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -29,9 +30,15 @@ func testConfig(env appenv.Environment) config.Config {
 	return config.Config{Environment: env, ListenAddr: ":0", BackendInternalURL: testInternalURL, SharedSecret: backend.Secret(testSecret)}
 }
 
+// quietDeps は、試験用の依存。記録の出力先（Logger・AccessLog・ErrorLog）は必須で、NewApp は、nil を捨てる出力先へ差し替えない。
+// この試験は記録を見ないので、捨てる出力先を、明示して渡す。
+func quietDeps() Deps {
+	return Deps{Logger: slog.New(slog.DiscardHandler), AccessLog: io.Discard, ErrorLog: io.Discard}
+}
+
 func newTestApp(t *testing.T, env appenv.Environment, mutate ...func(*Deps)) *App {
 	t.Helper()
-	deps := Deps{}
+	deps := quietDeps()
 	for _, m := range mutate {
 		m(&deps)
 	}
@@ -58,7 +65,7 @@ func TestNewAppRejectsAnInvalidInternalConfigWithoutEchoingIt(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := testConfig(appenv.Test)
 			tc.mutate(&cfg)
-			app, err := NewApp(cfg, Deps{})
+			app, err := NewApp(cfg, quietDeps())
 			if err == nil {
 				t.Fatalf("NewApp() = %v, nil; want an error", app)
 			}
@@ -128,7 +135,9 @@ func TestNewAppRefusesAPolicyOverrideInProduction(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewPolicy: %v", err)
 	}
-	if _, err := NewApp(testConfig(appenv.Production), Deps{Policy: &override}); !errors.Is(err, ErrPolicyOverrideInProduction) {
+	deps := quietDeps()
+	deps.Policy = &override
+	if _, err := NewApp(testConfig(appenv.Production), deps); !errors.Is(err, ErrPolicyOverrideInProduction) {
 		t.Fatalf("NewApp() error = %v; want ErrPolicyOverrideInProduction", err)
 	}
 }
@@ -278,5 +287,177 @@ func TestTheAppFormatsWithoutAnySecretOrAddress(t *testing.T) {
 				t.Errorf("%q contains %q", text, leaked)
 			}
 		}
+	}
+}
+
+// 記録の出力先（Logger・AccessLog・ErrorLog）は必須。nil を、捨てる出力先へ黙って差し替えない（記録が消えて、異常に気づけなくなる。
+// 捨ててよい試験は、捨てる出力先を明示して渡す）。#20 の session.Deps・backend.NewEventQueue と同じ扱い。
+func TestNewAppRequiresTheLogOutputsAndNeverSubstitutesThem(t *testing.T) {
+	cases := []struct {
+		name   string
+		mutate func(*Deps)
+	}{
+		{"Logger が無い", func(d *Deps) { d.Logger = nil }},
+		{"AccessLog が無い", func(d *Deps) { d.AccessLog = nil }},
+		{"ErrorLog が無い", func(d *Deps) { d.ErrorLog = nil }},
+		{"3 つとも無い", func(d *Deps) { *d = Deps{} }},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			deps := quietDeps()
+			tc.mutate(&deps)
+			app, err := NewApp(testConfig(appenv.Test), deps)
+			if app != nil {
+				t.Fatalf("NewApp() = %v; want no App when a log output is missing", app)
+			}
+			if !errors.Is(err, ErrInvalidDeps) {
+				t.Fatalf("NewApp() error = %v; want ErrInvalidDeps", err)
+			}
+			for _, leaked := range []string{"SECRET", testSecret, testInternalURL} {
+				if strings.Contains(err.Error(), leaked) {
+					t.Errorf("error text %q must not contain %q", err.Error(), leaked)
+				}
+			}
+		})
+	}
+}
+
+// 依存の不足は、ほかの設定の検査より先に、決まった形で報告する（設定が不正でも、不足は ErrInvalidDeps）
+func TestAMissingLogOutputIsReportedBeforeAnInvalidConfig(t *testing.T) {
+	cfg := testConfig(appenv.Test)
+	cfg.BackendInternalURL = "ftp://backend.internal.example:3101"
+	deps := quietDeps()
+	deps.Logger = nil
+	if _, err := NewApp(cfg, deps); !errors.Is(err, ErrInvalidDeps) {
+		t.Fatalf("NewApp() error = %v; want ErrInvalidDeps", err)
+	}
+}
+
+// 時計・待機・HTTP クライアントは、nil なら本番の実装（実時間・環境のプロキシを使わない既定のクライアント）。
+// 記録の出力先とは違い、差し替えが無いのが通常の姿
+func TestNewAppUsesTheProductionDefaultsForTheClockTheWaiterAndTheHTTPClient(t *testing.T) {
+	deps := quietDeps()
+	if deps.Clock != nil || deps.Waiter != nil || deps.HTTPClient != nil {
+		t.Fatalf("quietDeps() sets the clock, the waiter or the HTTP client: %+v", deps)
+	}
+	app, err := NewApp(testConfig(appenv.Test), deps)
+	if err != nil {
+		t.Fatalf("NewApp() error = %v; want nil with only the log outputs set", err)
+	}
+	if app.Registry() == nil || app.WebSocket() == nil || app.Handler() == nil {
+		t.Fatalf("the wiring is incomplete: registry %v, websocket %v, handler %v", app.Registry(), app.WebSocket(), app.Handler())
+	}
+}
+
+// serveForTest は、app を 127.0.0.1 の空きポートで待ち受けさせる。戻り値は、接続先（http://…）と、停止して Serve の結果を返す関数。
+// 試験が途中で失敗しても、後始末で停止させる。
+func serveForTest(t *testing.T, app *App) (base string, stop func() error) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	served := make(chan error, 1)
+	go func() { served <- app.Serve(ctx, listener) }()
+	stop = func() error {
+		cancel()
+		select {
+		case err := <-served:
+			return err
+		case <-time.After(15 * time.Second):
+			t.Fatal("Serve did not return after the context was cancelled")
+			return nil
+		}
+	}
+	return "http://" + listener.Addr().String(), stop
+}
+
+// waitForHTTPServer は、Serve が作った HTTP サーバーを返す（Serve が始まるまで待つ）。
+func waitForHTTPServer(t *testing.T, app *App) *http.Server {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if srv := app.httpServer(); srv != nil {
+			return srv
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("Serve did not create the HTTP server")
+		}
+		time.Sleep(time.Millisecond)
+	}
+}
+
+// Serve が作る HTTP サーバーの制限。値を固定する：要求ヘッダの読み取り 10 秒・keep-alive の無通信 60 秒・要求ヘッダ全体 16 KiB
+// （Go の既定は、無通信の期限が無く、ヘッダが 1 MiB）
+func TestServeBuildsTheHTTPServerWithTheConfiguredLimits(t *testing.T) {
+	app := newTestApp(t, appenv.Test)
+	_, stop := serveForTest(t, app)
+	srv := waitForHTTPServer(t, app)
+
+	if srv.ReadHeaderTimeout != 10*time.Second {
+		t.Errorf("ReadHeaderTimeout = %v; want 10s", srv.ReadHeaderTimeout)
+	}
+	if srv.IdleTimeout != 60*time.Second {
+		t.Errorf("IdleTimeout = %v; want 60s", srv.IdleTimeout)
+	}
+	if srv.MaxHeaderBytes != 16<<10 {
+		t.Errorf("MaxHeaderBytes = %d; want 16384 (16 KiB)", srv.MaxHeaderBytes)
+	}
+	if err := stop(); err != nil {
+		t.Fatalf("Serve() error = %v; want nil after a requested stop", err)
+	}
+}
+
+// 巨大なヘッダの要求は、431 で拒否する。通常の大きさのヘッダは、受け付ける
+func TestServeRefusesRequestHeadersLargerThanTheLimit(t *testing.T) {
+	app := newTestApp(t, appenv.Test)
+	base, stop := serveForTest(t, app)
+	client := &http.Client{Transport: &http.Transport{DisableKeepAlives: true}, Timeout: 10 * time.Second}
+
+	statusWithHeaderOf := func(size int) int {
+		t.Helper()
+		request, err := http.NewRequest(http.MethodGet, base+HealthPath, nil)
+		if err != nil {
+			t.Fatalf("NewRequest: %v", err)
+		}
+		request.Header.Set("X-Padding", strings.Repeat("a", size))
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatalf("GET %s with a %d-byte header: %v", HealthPath, size, err)
+		}
+		defer response.Body.Close()
+		_, _ = io.Copy(io.Discard, response.Body)
+		return response.StatusCode
+	}
+	if got := statusWithHeaderOf(8 << 10); got != http.StatusOK {
+		t.Errorf("status with an 8 KiB header = %d; want 200", got)
+	}
+	if got := statusWithHeaderOf(64 << 10); got != http.StatusRequestHeaderFieldsTooLarge {
+		t.Errorf("status with a 64 KiB header = %d; want 431", got)
+	}
+	if err := stop(); err != nil {
+		t.Fatalf("Serve() error = %v; want nil after a requested stop", err)
+	}
+}
+
+// 本番の HTTP サーバー（制限つき）を通しても、WebSocket へ切り替えられる（101）。切り替えのあとは、この HTTP サーバーの管理を外れる
+func TestAWebSocketUpgradeWorksThroughTheServedHTTPServer(t *testing.T) {
+	app := newTestApp(t, appenv.Test)
+	base, stop := serveForTest(t, app)
+
+	conn, response, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(base, "http")+WebSocketPath, nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	if response.StatusCode != http.StatusSwitchingProtocols {
+		t.Errorf("status = %d; want 101", response.StatusCode)
+	}
+	if err := conn.Close(); err != nil {
+		t.Errorf("close the client connection: %v", err)
+	}
+	if err := stop(); err != nil {
+		t.Fatalf("Serve() error = %v; want nil after a requested stop", err)
 	}
 }

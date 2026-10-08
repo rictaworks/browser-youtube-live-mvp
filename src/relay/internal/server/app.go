@@ -28,11 +28,14 @@ const (
 	DefaultFlushReserve = 2 * time.Second
 )
 
-// Deps は、App の依存。ゼロの欄は、本番の実装か、既定値。試験が差し替える（時計・待機・送出先の許可・TLS の信頼）。
+// Deps は、App の依存。記録の出力先（Logger・AccessLog・ErrorLog）は必須。それ以外のゼロの欄は、本番の実装か、既定値。
+// 試験が差し替える（時計・待機・送出先の許可・TLS の信頼）。
 type Deps struct {
-	// Logger は、異常の記録の出力先。nil なら、捨てる。
+	// Logger は、異常の記録の出力先（必須）。nil は ErrInvalidDeps。捨てる出力先へ黙って差し替えない（記録が消えて、異常に
+	// 気づけなくなる）。記録が要らない試験は、捨てる出力先（slog.DiscardHandler）を明示して渡す。
 	Logger *slog.Logger
-	// AccessLog・ErrorLog は、アクセスログとパニックの記録の出力先。nil なら、捨てる。
+	// AccessLog・ErrorLog は、アクセスログとパニックの記録の出力先（必須）。nil は ErrInvalidDeps。同じく、記録が要らない試験は、
+	// 捨てる出力先（io.Discard）を明示して渡す。
 	AccessLog io.Writer
 	ErrorLog  io.Writer
 	// Clock は、時計（取り込みセッション・WebSocket の受け口のタイマー）。nil なら、実時間。
@@ -81,13 +84,14 @@ type App struct {
 	server *http.Server
 }
 
-// NewApp は、中継を組み立てる。設定が不正なら（内部通信の接続先・秘密値・送出先の許可）、エラー。
-// エラーは、接続先・秘密値の内容を含まない。ゴルーチンは、まだ始めない。
+// NewApp は、中継を組み立てる。記録の出力先（Logger・AccessLog・ErrorLog）が無ければ ErrInvalidDeps（差し替えない）。
+// 設定が不正なら（内部通信の接続先・秘密値・送出先の許可）、エラー。エラーは、接続先・秘密値の内容を含まない。
+// ゴルーチンは、まだ始めない。
 func NewApp(cfg config.Config, deps Deps) (*App, error) {
-	logger := deps.Logger
-	if logger == nil {
-		logger = slog.New(slog.DiscardHandler)
+	if deps.Logger == nil || deps.AccessLog == nil || deps.ErrorLog == nil {
+		return nil, fmt.Errorf("%w: the logger, the access log and the error log are required", ErrInvalidDeps)
 	}
+	logger, accessLog, errorLog := deps.Logger, deps.AccessLog, deps.ErrorLog
 	clock := deps.Clock
 	if clock == nil {
 		clock = session.SystemClock{}
@@ -95,13 +99,6 @@ func NewApp(cfg config.Config, deps Deps) (*App, error) {
 	waiter := deps.Waiter
 	if waiter == nil {
 		waiter = backend.SystemWaiter{}
-	}
-	accessLog, errorLog := deps.AccessLog, deps.ErrorLog
-	if accessLog == nil {
-		accessLog = io.Discard
-	}
-	if errorLog == nil {
-		errorLog = io.Discard
 	}
 	grace, flushReserve := deps.Grace, deps.FlushReserve
 	if grace == 0 {
@@ -185,7 +182,12 @@ func (a *App) WebSocket() *wsapi.Handler { return a.ws }
 // 要求された停止なら nil。待ち受けが自分で止まった（listener の失敗など）ときは、後始末をして、そのエラー。
 // 1 つの App につき、1 回だけ呼ぶ。
 func (a *App) Serve(ctx context.Context, listener net.Listener) error {
-	srv := &http.Server{Handler: a.router, ReadHeaderTimeout: config.ReadHeaderTimeout}
+	srv := &http.Server{
+		Handler:           a.router,
+		ReadHeaderTimeout: config.ReadHeaderTimeout,
+		IdleTimeout:       config.IdleTimeout,
+		MaxHeaderBytes:    config.MaxHeaderBytes,
+	}
 	a.mu.Lock()
 	a.server = srv
 	a.mu.Unlock()

@@ -2,6 +2,7 @@ package server
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"strings"
 	"sync"
@@ -27,6 +28,16 @@ func (b *syncBuffer) String() string {
 	return b.buf.String()
 }
 
+// redirectOrFail は、RedirectThirdPartyLogs を呼び、失敗なら試験を止める。
+func redirectOrFail(t *testing.T, logger *slog.Logger) (restore func()) {
+	t.Helper()
+	restore, err := RedirectThirdPartyLogs(logger)
+	if err != nil {
+		t.Fatalf("RedirectThirdPartyLogs() error = %v; want nil", err)
+	}
+	return restore
+}
+
 // go-rtmp は、接続ごとに、logrus の標準の出力へ 1 行（"Changing chunkSize"）を書く。その出力先を、中継の記録（slog）へ揃える
 // （#19 のレビューの申し送り）。logrus 自身は、何も書かない。
 func TestRedirectThirdPartyLogsRoutesLogrusIntoSlogAndSilencesItsOwnOutput(t *testing.T) {
@@ -38,7 +49,7 @@ func TestRedirectThirdPartyLogsRoutesLogrusIntoSlogAndSilencesItsOwnOutput(t *te
 
 	var records syncBuffer
 	logger := slog.New(slog.NewJSONHandler(&records, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	restore := RedirectThirdPartyLogs(logger)
+	restore := redirectOrFail(t, logger)
 	logrus.Infof("Changing chunkSize %d->%d", 128, 4096)
 	logrus.Warn("a warning")
 	logrus.Error("an error")
@@ -73,7 +84,7 @@ func TestRoutedThirdPartyInfoLinesAreBelowTheProductionLevel(t *testing.T) {
 
 	var records syncBuffer
 	logger := slog.New(slog.NewJSONHandler(&records, &slog.HandlerOptions{Level: slog.LevelInfo}))
-	restore := RedirectThirdPartyLogs(logger)
+	restore := redirectOrFail(t, logger)
 	defer restore()
 	logrus.Infof("Changing chunkSize %d->%d", 128, 4096)
 	logrus.Warn("kept")
@@ -93,10 +104,29 @@ func TestRoutedThirdPartyMessagesAreTruncated(t *testing.T) {
 	t.Cleanup(func() { std.SetOutput(previousOut) })
 
 	var records syncBuffer
-	restore := RedirectThirdPartyLogs(slog.New(slog.NewJSONHandler(&records, &slog.HandlerOptions{Level: slog.LevelDebug})))
+	restore := redirectOrFail(t, slog.New(slog.NewJSONHandler(&records, &slog.HandlerOptions{Level: slog.LevelDebug})))
 	defer restore()
 	logrus.Warn(strings.Repeat("x", 5000))
 	if n := strings.Count(records.String(), "x"); n > maxThirdPartyMessageBytes {
 		t.Errorf("%d bytes of the message were logged; want at most %d", n, maxThirdPartyMessageBytes)
+	}
+}
+
+// ロガーは必須。nil のまま設定すると、外部のライブラリが最初に書いた時点で、そのゴルーチンごと落ちる（nil のロガーを呼ぶ）。
+// 捨てる出力先へ黙って差し替えず、エラーにする。このとき、logrus の設定は、何も変えない
+func TestRedirectThirdPartyLogsRequiresALoggerAndChangesNothingWithoutOne(t *testing.T) {
+	std := logrus.StandardLogger()
+	var original bytes.Buffer
+	previousOut := std.Out
+	std.SetOutput(&original)
+	t.Cleanup(func() { std.SetOutput(previousOut) })
+
+	restore, err := RedirectThirdPartyLogs(nil)
+	if restore != nil || !errors.Is(err, ErrInvalidDeps) {
+		t.Fatalf("RedirectThirdPartyLogs(nil) = (restore function %t, error %v); want no restore function and ErrInvalidDeps", restore != nil, err)
+	}
+	logrus.Info("still on the original output")
+	if !strings.Contains(original.String(), "still on the original output") {
+		t.Errorf("logrus output changed although the logger was missing: %q", original.String())
 	}
 }

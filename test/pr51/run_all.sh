@@ -13,11 +13,14 @@
 #   7. 依存：go mod verify・go mod tidy の差分が無いこと
 #   8. 本番用イメージのビルド（docker build --target production src/relay）
 #   9. 開発サーバーの確認：GET /health・GET /ws（実際の WebSocket の接続。無効なチケット・テキスト・2 MiB 超・hello の期限など）
-#  10. 走査器の自己検査 / 11. ソースの走査（絵文字・削除系・go.mod・変更の範囲）
+#  10. 走査器の自己検査 / 11. ソースの走査（絵文字・削除系・go.mod・変更の範囲）。go.mod・go.sum と変更の範囲は、PR のブランチの
+#      コミット済みの内容を、比較の基準（既定 origin/main。環境変数 PR_BASE_REF で変える）と比べる。作業ツリーの未コミットの変更
+#      （他の issue の作業）は見ない。基準を解決できなければ、エラー（終了コード 2。別の基準へ切り替えない）
 #
 # 使い方: このファイルを実行する（リポジトリのどこからでもよい。場所は、このファイル自身から解決する）
-#   事前に scripts/setup_dev_env.sh で .env を作る
-# 終了コード: 0 = すべて成功 / 1 = 失敗がある / 2 = 前提の不足
+#   事前に scripts/setup_dev_env.sh で .env を作る。origin/main が無い、または古いときは、git fetch origin main で取得するか、
+#   PR_BASE_REF=<基準のコミット・ブランチ> test/pr51/run_all.sh のように指定する
+# 終了コード: 0 = すべて成功 / 1 = 失敗がある / 2 = 前提の不足（.env が無い、など）
 # ハーネスの安全（.claude/TEST-HARNESS-SAFETY.md）: 自己再帰ガード（TH1）・ulimit -u と各手順の timeout（TH3）。ファイルは作るだけで、消さない。
 set -uo pipefail
 
@@ -104,7 +107,7 @@ run "本番用イメージのビルド（docker build --target production src/re
 run "開発サーバーの確認（GET /health・GET /ws。実際の WebSocket の接続）" python3 -I "$HERE/dev_server_check.py" --port "$RELAY_PORT"
 
 run "走査器の自己検査" python3 -I "$HERE/scan_sources.py" --self-test
-run "ソースの走査（絵文字・削除系・go.mod・変更の範囲）" python3 -I "$HERE/scan_sources.py" "$ROOT_DIR"
+run "ソースの走査（絵文字・削除系・go.mod・変更の範囲。基準 ${PR_BASE_REF:-origin/main}）" python3 -I "$HERE/scan_sources.py" "$ROOT_DIR" "${PR_BASE_REF:-origin/main}"
 
 printf '\n######## 結果（PR #51）\n'
 printf '%s\n' "${results[@]}"

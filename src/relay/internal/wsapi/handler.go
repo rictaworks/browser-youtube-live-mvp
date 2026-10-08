@@ -74,7 +74,7 @@ type Handler struct {
 	links    map[*link]struct{}
 }
 
-// NewHandler は、WebSocket の受け口を作る。acceptor が nil、時計が無い、設定が不正なら、エラー。
+// NewHandler は、WebSocket の受け口を作る。acceptor が nil、時計かロガーが無い（ErrInvalidDeps）、設定が不正（ErrInvalidOptions）なら、エラー。
 func NewHandler(acceptor Acceptor, opts Options) (*Handler, error) {
 	if acceptor == nil {
 		return nil, fmt.Errorf("%w: the acceptor is required", ErrInvalidDeps)

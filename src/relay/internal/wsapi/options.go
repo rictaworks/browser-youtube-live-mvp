@@ -14,8 +14,10 @@ import (
 const (
 	// DefaultMaxConnections は、同時に受け付ける WebSocket の接続数の上限。実際の配信は、同時配信数の上限（既定 3）に
 	// 復帰の重なりを足した程度。上限は、チケットを持たない接続（接続通知の期限 10 秒まで居座れる）が、中継の資源を使い切ることを防ぐ。
-	// 照合の前の接続も、1 メッセージを 2 MiB まで読むので、最悪のメモリは、接続数 × 約 2 MiB（受け取った量に比例して確保する）。
-	// 64 本なら、最悪でも約 128 MiB。
+	// 照合の前の接続も、1 メッセージを 2 MiB まで読む。読み取りの緩衝は、受け取った量に比例して倍々に増やす（read.go）ので、
+	// 1 本が使うメモリは、読んだ量に応じて増え、最後の拡張で最大になる：古い緩衝（1 MiB）と新しい緩衝（2 MiB + 1 バイト）が
+	// 同時に生きる、約 3 MiB。64 本が同時に最後の拡張へ進んだ最悪は、生きている緩衝の合計で約 192 MiB。古い緩衝は、回収（GC）される
+	// まで残るので、実際の使用量はこれを上回り得る。この見積もりは接続数に比例する（上限を上げるときは、取り直す）。
 	DefaultMaxConnections = 64
 	// DefaultSendQueueLimit は、ブラウザへの送信待ち（重要なメッセージ）の上限。ブラウザへ送るのは、接続受理・計測結果・
 	// キーフレーム要求・状態通知・致命通知で、どれも小さく、まれ。これを超えるのは、ブラウザが読んでいないとき。
@@ -39,7 +41,9 @@ const (
 type Options struct {
 	// Clock は、時計（必須）。ping・無通信の監視・書き込みの期限・切断の待ちは、すべてここから取る（実時間を直接使わない）。
 	Clock session.Clock
-	// Logger は、異常の記録の出力先。nil なら、捨てる。配信キー・チケット・取り込み先・エラーの文言を出さない。
+	// Logger は、異常の記録の出力先（必須）。nil は ErrInvalidDeps で、捨てる出力先へ黙って差し替えない（記録が消えて、異常に
+	// 気づけなくなる）。記録が要らない試験は、捨てる出力先（slog.DiscardHandler）を明示して渡す。
+	// 配信キー・チケット・取り込み先・エラーの文言を出さない。
 	Logger *slog.Logger
 	// MaxMessageBytes は、1 メッセージ（ヘッダ + 本文）の上限（ws_frame.max_message_bytes）。契約より大きくできない。
 	MaxMessageBytes int
@@ -59,10 +63,13 @@ type Options struct {
 	HandshakeTimeout time.Duration
 }
 
-// normalized は、ゼロの欄を既定値にして、検査する。時計が無ければ ErrInvalidDeps。
+// normalized は、ゼロの欄を既定値にして、検査する。時計かロガーが無ければ ErrInvalidDeps（どちらも、既定値で補わない）。
 func (o Options) normalized() (Options, error) {
 	if o.Clock == nil {
 		return Options{}, fmt.Errorf("%w: the clock is required", ErrInvalidDeps)
+	}
+	if o.Logger == nil {
+		return Options{}, fmt.Errorf("%w: the logger is required", ErrInvalidDeps)
 	}
 	counts := []struct {
 		name     string
@@ -108,9 +115,6 @@ func (o Options) normalized() (Options, error) {
 	}
 	if o.IdleTimeout <= o.PingInterval {
 		return Options{}, fmt.Errorf("%w: IdleTimeout must be longer than PingInterval", ErrInvalidOptions)
-	}
-	if o.Logger == nil {
-		o.Logger = slog.New(slog.DiscardHandler)
 	}
 	return o, nil
 }

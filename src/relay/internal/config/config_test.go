@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/rictaworks/browser-youtube-live-mvp/relay/internal/appenv"
 )
@@ -63,6 +64,19 @@ func TestListenAddress(t *testing.T) {
 func TestDefaultPortIs3002(t *testing.T) {
 	if DefaultPort != 3002 {
 		t.Fatalf("DefaultPort = %d; want 3002", DefaultPort)
+	}
+}
+
+// HTTP サーバーの制限の値。値を固定する（要求ヘッダの読み取り 10 秒・keep-alive の無通信 60 秒・要求ヘッダ全体 16 KiB）
+func TestHTTPServerLimits(t *testing.T) {
+	if ReadHeaderTimeout != 10*time.Second {
+		t.Errorf("ReadHeaderTimeout = %v; want 10s", ReadHeaderTimeout)
+	}
+	if IdleTimeout != 60*time.Second {
+		t.Errorf("IdleTimeout = %v; want 60s", IdleTimeout)
+	}
+	if MaxHeaderBytes != 16*1024 {
+		t.Errorf("MaxHeaderBytes = %d; want 16384 (16 KiB)", MaxHeaderBytes)
 	}
 }
 

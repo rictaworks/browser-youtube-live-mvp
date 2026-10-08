@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -450,4 +451,50 @@ func TestNoticesFromTheApplicationAreForwardedToTheBrowser(t *testing.T) {
 	if !strings.Contains(string(encoded), "watch_url") {
 		t.Errorf("status = %s; want the watch URL in every status after preparation", encoded)
 	}
+}
+
+// 成功した WebSocket は、アクセスログに 200 と記録される。Gin は、ハンドラが書いた状態を記録するが、gorilla は 101 の応答を
+// 生の接続へ直接書くので、Gin から見える状態は既定の 200 のまま。したがって、/ws の 200 は「切り替えが確立した」の意味で、
+// 切り替えを拒否した要求は、拒否の状態（400）で記録される（logging.go のコメント）。行は、接続が終わったとき（ハンドラが戻ったとき）に
+// 書かれる。クエリ・チケット・クライアントの IP アドレスは、記録しない。
+func TestTheAccessLogRecords200ForAnEstablishedWebSocketAndTheRefusalStatusOtherwise(t *testing.T) {
+	env := newRelayEnv(t)
+
+	c := env.dial()
+	c.hello("dummy-unknown-ticket-SECRET")
+	c.waitFor(contract.FrameTypeFatal, fatalIs("invalid_ticket"))
+	c.waitClosed()
+
+	response, err := http.Get(env.http.URL + "/ws")
+	if err != nil {
+		t.Fatalf("GET /ws without an upgrade: %v", err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("GET /ws without an upgrade = %d; want 400", response.StatusCode)
+	}
+
+	var lines []string
+	eventually(t, "the access log has the lines of both requests", func() bool {
+		lines = lines[:0]
+		for _, line := range strings.Split(env.access.String(), "\n") {
+			if strings.Contains(line, `"/ws"`) {
+				lines = append(lines, line)
+			}
+		}
+		return len(lines) == 2
+	})
+	statusOf := map[string]bool{}
+	for _, line := range lines {
+		switch {
+		case strings.Contains(line, "| 200 |"):
+			statusOf["200"] = true
+		case strings.Contains(line, "| 400 |"):
+			statusOf["400"] = true
+		}
+	}
+	if !statusOf["200"] || !statusOf["400"] {
+		t.Errorf("access log lines of /ws = %q; want one with 200 (established) and one with 400 (refused)", lines)
+	}
+	env.assertNoSecretsLogged()
 }

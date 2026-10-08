@@ -36,6 +36,17 @@ const (
 	// ReadHeaderTimeout は、リクエストヘッダの読み取りの期限（低速な接続による占有を防ぐ）。
 	ReadHeaderTimeout = 10 * time.Second
 
+	// IdleTimeout は、HTTP の keep-alive 接続が、次の要求を待つ時間の上限（要求を送らずに居座る接続を残さない）。
+	// WebSocket は、切り替えの時点でこのサーバーの管理を外れる（gorilla が接続の期限を解除する）ので、この期限の対象ではない
+	// （死活は、WebSocket の受け口が、ping と無通信の期限で見る）。
+	IdleTimeout = 60 * time.Second
+
+	// MaxHeaderBytes は、リクエストヘッダ全体の大きさの上限（バイト）。Go の既定は 1 MiB で、1 接続が巨大なヘッダでメモリを
+	// 使うのを防ぐには大きすぎる。この口が受ける要求は、/health と WebSocket の切り替えだけで、Cookie も使わない（ヘッダは、
+	// ブラウザの切り替え要求と、経路のプロキシが足す転送ヘッダ程度）。余裕を見て 16 KiB。大きく超える要求は、
+	// 431（Request Header Fields Too Large）で拒否される（Go は、読み取りの緩衝のぶんとして 4 KiB を足して数える）。
+	MaxHeaderBytes = 16 << 10
+
 	minPort = 1
 	maxPort = 65535
 )

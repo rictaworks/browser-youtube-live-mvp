@@ -45,14 +45,21 @@ func newLogger(env appenv.Environment, w io.Writer) *slog.Logger {
 }
 
 // newApp は、環境変数（lookup）から設定を読み、中継を結線する。必須の変数が欠けている、値が不正なら、既定の値へ倒さず、エラーにする
-// （エラーは、欠けている名前だけを示し、値を含まない）。stdout にはアクセスログ、stderr には記録とパニックの記録を書く。
+// （エラーは、欠けている名前だけを示し、値を含まない）。stdout にはアクセスログ、stderr には記録とパニックの記録を書く
+// （どちらも必須。nil は server.ErrInvalidDeps で、捨てる出力先へ差し替えない）。
 func newApp(lookup config.LookupFunc, stdout, stderr io.Writer) (*app, error) {
+	if stdout == nil || stderr == nil {
+		return nil, fmt.Errorf("%w: the standard output and the standard error are required", server.ErrInvalidDeps)
+	}
 	cfg, err := config.Load(lookup)
 	if err != nil {
 		return nil, err
 	}
 	logger := newLogger(cfg.Environment, stderr)
-	restore := server.RedirectThirdPartyLogs(logger)
+	restore, err := server.RedirectThirdPartyLogs(logger)
+	if err != nil {
+		return nil, fmt.Errorf("redirect the logs of the libraries: %w", err)
+	}
 	relay, err := server.NewApp(cfg, server.Deps{Logger: logger, AccessLog: stdout, ErrorLog: stderr})
 	if err != nil {
 		restore()

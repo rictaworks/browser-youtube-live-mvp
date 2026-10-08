@@ -584,7 +584,13 @@ func TestNewHandlerRequiresItsDependencies(t *testing.T) {
 	if _, err := NewHandler(newFakeAcceptor(), Options{}); !errors.Is(err, ErrInvalidDeps) {
 		t.Errorf("NewHandler(no clock) error = %v; want ErrInvalidDeps", err)
 	}
-	if _, err := NewHandler(newFakeAcceptor(), Options{Clock: newFakeClock(), MaxConnections: -1}); !errors.Is(err, ErrInvalidOptions) {
+	// ロガーも必須。無ければ、捨てる出力先へ差し替えず、エラー（記録が黙って消えて、異常に気づけなくならないように）
+	if handler, err := NewHandler(newFakeAcceptor(), Options{Clock: newFakeClock()}); handler != nil || !errors.Is(err, ErrInvalidDeps) {
+		t.Errorf("NewHandler(no logger) = %v, %v; want no handler and ErrInvalidDeps", handler, err)
+	}
+	badOptions := testOptions(newFakeClock())
+	badOptions.MaxConnections = -1
+	if _, err := NewHandler(newFakeAcceptor(), badOptions); !errors.Is(err, ErrInvalidOptions) {
 		t.Errorf("NewHandler(bad options) error = %v; want ErrInvalidOptions", err)
 	}
 }
@@ -602,13 +608,19 @@ func TestOnlyGetIsServed(t *testing.T) {
 }
 
 // 実時間の時計（session.SystemClock）でも、ping・無通信の期限・書き込みの期限のタイマーが動く
-// （タイマーを Reset して使い回すので、鳴った後の Reset・Stop が正しく動くことの確認）
+// （タイマーを Reset して使い回すので、鳴った後の Reset・Stop が正しく動くことの確認）。
+// 実時間の余裕は広く取る：応答するクライアントが、負荷の高い実行（競合検出つき・低い並列度・他の試験の並走）で、無通信の期限の
+// 手前で pong を返せずに、誤って切られることがないように（ping 100 ミリ秒・無通信の期限 1 秒。pong を返す機会が 10 回ある）。
 func TestPingAndIdleDropWorkWithTheRealClock(t *testing.T) {
+	const (
+		pingInterval = 100 * time.Millisecond
+		idleTimeout  = time.Second
+	)
 	logs := &syncBuffer{}
 	acceptor := newFakeAcceptor()
 	handler, err := NewHandler(acceptor, Options{
 		Clock: session.SystemClock{}, Logger: slog.New(slog.NewJSONHandler(logs, nil)),
-		PingInterval: 20 * time.Millisecond, IdleTimeout: 80 * time.Millisecond, WriteTimeout: time.Second, LingerTimeout: 200 * time.Millisecond,
+		PingInterval: pingInterval, IdleTimeout: idleTimeout, WriteTimeout: 5 * time.Second, LingerTimeout: 500 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatalf("NewHandler: %v", err)
@@ -624,7 +636,7 @@ func TestPingAndIdleDropWorkWithTheRealClock(t *testing.T) {
 	})
 	url := "ws" + strings.TrimPrefix(server.URL, "http")
 
-	// 読み続けるクライアントは、ping に pong で答えるので、無通信の期限（80 ミリ秒）の何倍たっても、切られない
+	// 読み続けるクライアントは、ping に pong で答えるので、無通信の期限（1 秒）を過ぎても、切られない
 	responsive, _, err := websocket.DefaultDialer.Dial(url, nil)
 	if err != nil {
 		t.Fatalf("dial: %v", err)
@@ -642,7 +654,9 @@ func TestPingAndIdleDropWorkWithTheRealClock(t *testing.T) {
 	dropped := acceptor.nextConn(t)
 
 	eventually(t, "the silent peer was dropped", func() bool { _, _, _, d := dropped.counts(); return d == 1 })
-	time.Sleep(400 * time.Millisecond)
+	// 読まないクライアントが切られた時点で、応答するクライアントは、無通信の期限の長さを、ちょうど生きたところ。さらに、期限の長さだけ待つ
+	// （合計で期限の約 2 倍。pong を返せていなければ、ここまでに切られている）
+	time.Sleep(idleTimeout)
 	if _, _, _, d := alive.counts(); d != 0 {
 		t.Fatalf("the responsive peer was dropped (Disconnected %d times)", d)
 	}
@@ -653,4 +667,7 @@ func TestPingAndIdleDropWorkWithTheRealClock(t *testing.T) {
 	if !strings.Contains(logs.String(), "idle_timeout") {
 		t.Errorf("the drop was not logged with its reason: %s", logs.String())
 	}
+	// 後始末が、残った接続の終了を待たされないように、応答するクライアントも、ここで閉じる
+	_ = responsive.Close()
+	eventually(t, "the responsive peer was closed", func() bool { _, _, _, d := alive.counts(); return d == 1 })
 }

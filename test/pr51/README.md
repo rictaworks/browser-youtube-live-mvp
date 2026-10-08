@@ -9,6 +9,13 @@ scripts/setup_dev_env.sh   # .env を生成します（済んでいれば何も�
 test/pr51/run_all.sh
 ```
 
+`go.mod`・`go.sum` の変更と、変更の範囲の検査は、PR のブランチのコミット済みの内容を、比較の基準（既定は `origin/main`）と比べます。作業ツリーの未コミットの変更・未追跡のファイル（他の issue の作業）は見ません。基準を解決できないときは、別の基準へ切り替えずに、エラー（終了コード 2）にします。`origin/main` が無い、または古いときは、`git fetch origin main` で取得するか、環境変数 `PR_BASE_REF` で基準を指定します。
+
+```bash
+git fetch origin main
+PR_BASE_REF=origin/main test/pr51/run_all.sh   # 基準を明示する場合（省略時も origin/main）
+```
+
 | 手順 | 確かめること |
 |---|---|
 | relay コンテナの再起動 | 現在のソースで、開発用のバイナリをビルドし直して起動できる（healthy になる） |
@@ -21,9 +28,9 @@ test/pr51/run_all.sh
 | `go mod verify`・`go mod tidy -diff` | 依存が整っている（`gorilla/websocket` v1.5.3 と、`logrus` の直接参照への移動だけ） |
 | `docker build --target production src/relay` | 本番用イメージがビルドできる |
 | `dev_server_check.py` | 開発サーバーに、実際の WebSocket で接続し、下の表のとおりに答える |
-| `scan_sources.py --self-test` / `scan_sources.py` | 走査器が、違反を見逃さず、誤検知しない。対象のファイルがそろっている。絵文字・削除系の記述が無い。`go.mod` が `gorilla/websocket` v1.5.3 を固定している。`src/relay` の変更が、範囲の中だけ |
+| `scan_sources.py --self-test` / `scan_sources.py` | 走査器が、違反を見逃さず、誤検知しない（一時ディレクトリの確認用リポジトリで、コミット済みの内容だけを見ること、基準が解決できないときはエラーになることも確かめる）。対象のファイルがそろっている。絵文字・削除系の記述が無い。HEAD の `go.mod` が `gorilla/websocket` v1.5.3 を直接の要求として持ち、基準との差が許可した行だけ（`go.sum` は `gorilla/websocket` の行の追加だけ）。`src/relay` の変更が、範囲の中だけ |
 
-終了コード 0 が成功です（1 = 失敗がある、2 = `.env` が無いなど前提の不足）。
+終了コード 0 が成功です（1 = 失敗がある、2 = `.env` が無い・比較の基準を解決できないなど前提の不足）。
 
 ## 開発サーバーの確認（`dev_server_check.py`）
 
@@ -33,6 +40,7 @@ test/pr51/run_all.sh
 |---|---|
 | `GET /health` | 200 と `{"status":"ok"}`（#1 のまま） |
 | WebSocket ではない `GET /ws`、`POST /ws` | 400、404 |
+| 64 KiB のヘッダの `GET /health`（通常の大きさのヘッダは 2 KiB） | 431（HTTP サーバーの上限は 16 KiB）。2 KiB は 200 |
 | `Origin: http://evil.example` からの接続 | 受け付ける（Cookie を使わず、接続チケットで認可するため。`handler.go` の `CheckOrigin` のコメント） |
 | 形式の不正なチケット（空白を含む）の hello | 致命通知 `invalid_ticket` のあと、通常の切断（1000） |
 | 存在しないチケットの hello | 致命通知 `invalid_ticket`（アプリケーションが照合できる場合）、または `internal_error`（アプリケーションの内部通信の口が、まだ無い場合）のあと、通常の切断 |
@@ -63,7 +71,18 @@ test/pr51/run_all.sh
 | 結合：ブラウザの切断 → 復帰（時刻が連続） | `TestBrowserDisconnectAndResumeKeepTheOutputTimelineContinuous`・`TestAResumeHelloToARestartedRelayRebuildsTheSession` |
 | 負荷：同時 20 接続（30 fps）で、ゴルーチン・メモリが線形、`-race` に警告が無い | `TestTwentyConcurrentBroadcastsAtThirtyFramesPerSecondScaleLinearly` |
 
-Go の構文木による規則（実時計を使わない・接続に実時間の期限を設定しない・`SetReadLimit` を使わない・グローバル変数を持たない・日本語を直書きしない・ログに秘密値と受信した内容とエラーの文言を渡さない・`rtmps.NewPolicy` を本番のコードに置かない・`InsecureSkipVerify` を書かない）は、`src/relay/internal/wsapi/rules_test.go` が、`internal/wsapi`・`internal/server`・`internal/config`・`main.go` について検査します。
+Go の構文木による規則（実時計を使わない・接続に実時間の期限を設定しない・`SetReadLimit` を使わない・圧縮を有効にしない（`EnableCompression` の呼び出し・複合リテラルの欄・欄への代入）・グローバル変数を持たない・日本語を直書きしない・ログに秘密値と受信した内容とエラーの文言を渡さない・`rtmps.NewPolicy` を本番のコードに置かない・`InsecureSkipVerify` を書かない）は、`src/relay/internal/wsapi/rules_test.go` が、`internal/wsapi`・`internal/server`・`internal/config`・`main.go` について検査します。
+
+## レビューの差し戻しで足した検査
+
+| 内容 | 確かめるテスト |
+|---|---|
+| 記録の出力先（`Logger`・`AccessLog`・`ErrorLog`）は必須。nil を、捨てる出力先へ黙って差し替えない（#20 の `session.Deps` と同じ）。時計・待機・HTTP クライアントは、nil なら本番の実装のまま | `TestNewAppRequiresTheLogOutputsAndNeverSubstitutesThem`・`TestAMissingLogOutputIsReportedBeforeAnInvalidConfig`・`TestNewAppUsesTheProductionDefaultsForTheClockTheWaiterAndTheHTTPClient`・`TestNewRouterRequiresTheLogOutputs`・`TestRedirectThirdPartyLogsRequiresALoggerAndChangesNothingWithoutOne`・`TestNewAppRequiresTheOutputsAndNeverSubstitutesThem`（`main`）・`TestOptionsRejectInvalidValues`・`TestNewHandlerRequiresItsDependencies`（`wsapi`） |
+| HTTP サーバーの制限：ヘッダの読み取り 10 秒・keep-alive の無通信 60 秒・要求ヘッダ 16 KiB（超えれば 431）。制限つきでも WebSocket に切り替えられる | `TestHTTPServerLimits`・`TestServeBuildsTheHTTPServerWithTheConfiguredLimits`・`TestServeRefusesRequestHeadersLargerThanTheLimit`・`TestAWebSocketUpgradeWorksThroughTheServedHTTPServer` |
+| 圧縮を有効にする記述（複合リテラルの欄・欄への代入）を、走査器が見つける | `TestRulesScannerFindsViolations` |
+| パニックの記録の経路は引用符つき（改行で記録の行を偽造させない）。成功した WebSocket のアクセスログは 200、拒否は拒否の状態 | `TestRecoveryLogQuotesTheRequestPath`・`TestTheAccessLogRecords200ForAnEstablishedWebSocketAndTheRefusalStatusOtherwise` |
+| 読み取りの緩衝の最後の拡張は、上限 + 1 バイトへ一気に増やす（読み取り中の最大が 4 MiB から 3 MiB）。内容と上限の判定は変わらない | `TestReadMessageKeepsTheDataAcrossTheGrowthSteps`・`TestReadMessageGrowsStraightToTheLimitInTheLastStep` |
+| 実時間の時計での ping・無通信の検査は、余裕を広く取る（ping 100 ミリ秒・無通信の期限 1 秒） | `TestPingAndIdleDropWorkWithTheRealClock` |
 
 ## 確かめられないこと
 

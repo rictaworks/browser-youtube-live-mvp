@@ -16,7 +16,15 @@ func readMessage(r io.Reader, limit int) (data []byte, oversize bool, err error)
 	buffer := make([]byte, 0, min(initialReadBytes, limit+1))
 	for {
 		if len(buffer) == cap(buffer) {
-			grown := make([]byte, len(buffer), min(2*cap(buffer), limit+1))
+			// 倍にすると上限に届く（上限以上になる）最後の拡張は、上限 + 1 バイトへ一気に増やす（上限 + 1 バイトを読んだ時点で
+			// 打ち切るので、それ以上は要らない）。上限が 2 MiB なら、1 MiB の次が 2 MiB + 1 バイト。倍々のまま進めると、
+			// 2 MiB の段を挟んで、最後の拡張で「古い 2 MiB と新しい 2 MiB + 1 バイト」が同時に生きる（約 4 MiB）。
+			// 一気に増やせば、「古い 1 MiB と新しい 2 MiB + 1 バイト」の約 3 MiB で済む。
+			next := 2 * cap(buffer)
+			if next >= limit {
+				next = limit + 1
+			}
+			grown := make([]byte, len(buffer), next)
 			copy(grown, buffer)
 			buffer = grown
 		}

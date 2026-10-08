@@ -8,7 +8,9 @@ package wsapi
 //   - 接続に、実時間の期限を設定しない：SetReadDeadline・SetWriteDeadline・SetDeadline を呼ばない。WriteControl の期限は、零値の
 //     time.Time{}（期限は、時計のタイマーが持つ）
 //   - SetReadLimit を使わない（超過した時点で、ライブラリが Close コード 1009 を送って終わり、致命通知 message_too_large を
-//     先に送れない。自前で数える）。圧縮を有効にしない（EnableCompression。展開による膨張を避ける）
+//     先に送れない。自前で数える）。圧縮を有効にしない（展開による膨張を避ける）：gorilla/websocket では、Upgrader・Dialer の
+//     EnableCompression の欄で有効になるので、複合リテラルの欄（Upgrader{EnableCompression: …}）と、欄への代入
+//     （u.EnableCompression = …）を検出する（EnableCompression というメソッドの呼び出しも）
 //   - 入出力に触れない：os・log・ファイル・標準出力・乱数を使わない（メディアをファイルへ保存しない）
 //   - 接続元の Origin を検査しない旨と理由が、CheckOrigin のコメントにある
 //   - 受信した内容（メッセージ・本文・データ）と、秘密値を、ログに渡さない。エラーの文言（.Error()）も渡さない
@@ -53,6 +55,8 @@ type ruleSet struct {
 	forbiddenCalls []string
 	// forbiddenMethods は、どのファイルでも呼ばないメソッド（名前だけで判定する）
 	forbiddenMethods []string
+	// forbiddenFields は、どのファイルでも設定しない欄（名前だけで判定する）。複合リテラルの欄（T{Name: …}）と、欄への代入（x.Name = …）
+	forbiddenFields []string
 	// secretNames は、ログの引数に渡してはならない名前
 	secretNames []string
 	// zeroDeadlineControl が真なら、WriteControl の 3 番目の引数は、零値の time.Time{} に限る
@@ -91,6 +95,7 @@ func wsapiRuleSet() ruleSet {
 			"fmt.Fprint", "fmt.Fprintf", "fmt.Fprintln", "rtmps.NewPolicy", "context.WithTimeout", "context.WithDeadline",
 		}),
 		forbiddenMethods:    []string{"SetReadLimit", "SetReadDeadline", "SetWriteDeadline", "SetDeadline", "EnableCompression"},
+		forbiddenFields:     []string{"EnableCompression"},
 		secretNames:         joined(baseSecretNames(), []string{"message", "data", "body", "payload"}),
 		zeroDeadlineControl: true,
 	}
@@ -105,6 +110,7 @@ func serverRuleSet() ruleSet {
 		forbiddenImports:        []string{"os", "io/ioutil", "database/sql", "math/rand", "math/rand/v2", "crypto/rand", "crypto/tls", "plugin", "unsafe"},
 		forbiddenImportPrefixes: []string{"os/", "github.com/yutopp/"},
 		forbiddenCalls:          joined(printCalls(), []string{"rtmps.NewPolicy", "http.DefaultClient", "http.Get", "http.Post"}),
+		forbiddenFields:         []string{"EnableCompression"},
 		secretNames:             baseSecretNames(),
 	}
 }
@@ -291,8 +297,19 @@ func scanRulesFile(rules ruleSet, fset *token.FileSet, file *ast.File, name stri
 				scanLogArguments(rules, typed, add)
 			}
 		case *ast.KeyValueExpr:
-			if key, ok := typed.Key.(*ast.Ident); ok && key.Name == "InsecureSkipVerify" {
-				add(typed.Pos(), "tls", "InsecureSkipVerify must not be set here")
+			if key, ok := typed.Key.(*ast.Ident); ok {
+				if key.Name == "InsecureSkipVerify" {
+					add(typed.Pos(), "tls", "InsecureSkipVerify must not be set here")
+				}
+				if containsString(rules.forbiddenFields, key.Name) {
+					add(typed.Pos(), "field", key.Name+" must not be set in "+rules.name)
+				}
+			}
+		case *ast.AssignStmt:
+			for _, left := range typed.Lhs {
+				if selector, ok := left.(*ast.SelectorExpr); ok && containsString(rules.forbiddenFields, selector.Sel.Name) {
+					add(left.Pos(), "field", selector.Sel.Name+" must not be set in "+rules.name)
+				}
 			}
 		}
 		return true
@@ -389,6 +406,11 @@ func TestRulesScannerFindsViolations(t *testing.T) {
 		{"SetReadDeadline", wsapiRuleSet(), "x.go", "package p\ntype c struct{}\nfunc (c) SetReadDeadline(int) {}\nfunc f(x c) { x.SetReadDeadline(1) }\n", []string{"method"}},
 		{"SetWriteDeadline", wsapiRuleSet(), "x.go", "package p\ntype c struct{}\nfunc (c) SetWriteDeadline(int) {}\nfunc f(x c) { x.SetWriteDeadline(1) }\n", []string{"method"}},
 		{"EnableCompression", wsapiRuleSet(), "x.go", "package p\ntype c struct{}\nfunc (c) EnableCompression(bool) {}\nfunc f(x c) { x.EnableCompression(true) }\n", []string{"method"}},
+		{"EnableCompression（Upgrader の欄）", wsapiRuleSet(), "x.go", "package p\nimport \"github.com/gorilla/websocket\"\nfunc f() websocket.Upgrader { return websocket.Upgrader{EnableCompression: true} }\n", []string{"field"}},
+		{"EnableCompression（Dialer の欄）", wsapiRuleSet(), "x.go", "package p\nimport \"github.com/gorilla/websocket\"\nfunc f() *websocket.Dialer { return &websocket.Dialer{EnableCompression: true} }\n", []string{"field"}},
+		{"EnableCompression（欄への代入）", wsapiRuleSet(), "x.go", "package p\nimport \"github.com/gorilla/websocket\"\nfunc f(u *websocket.Upgrader) { u.EnableCompression = true }\n", []string{"field"}},
+		{"EnableCompression（server でも）", serverRuleSet(), "x.go", "package p\ntype up struct{ EnableCompression bool }\nfunc f() up { return up{EnableCompression: true} }\n", []string{"field"}},
+		{"Upgrader のほかの欄は可", wsapiRuleSet(), "x.go", "package p\nimport \"github.com/gorilla/websocket\"\nfunc f() websocket.Upgrader { return websocket.Upgrader{ReadBufferSize: 4096, WriteBufferSize: 4096} }\n", nil},
 		{"WriteControl の期限が零値", wsapiRuleSet(), "x.go", "package p\nimport \"time\"\ntype c struct{}\nfunc (c) WriteControl(int, []byte, time.Time) error { return nil }\nfunc f(x c) { _ = x.WriteControl(9, nil, time.Time{}) }\n", nil},
 		{"WriteControl の期限が零値ではない", wsapiRuleSet(), "x.go", "package p\nimport \"time\"\ntype c struct{}\nfunc (c) WriteControl(int, []byte, time.Time) error { return nil }\nfunc f(x c, d time.Time) { _ = x.WriteControl(9, nil, d) }\n", []string{"deadline"}},
 		{"rtmps.NewPolicy", serverRuleSet(), "x.go", "package p\nimport \"github.com/rictaworks/browser-youtube-live-mvp/relay/internal/rtmps\"\nfunc f() { _, _ = rtmps.NewPolicy() }\n", []string{"call"}},

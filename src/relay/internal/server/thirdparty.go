@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"log/slog"
 
@@ -22,8 +23,14 @@ const componentGoRTMP = "go-rtmp"
 // メッセージは、長さを制限して写す。go-rtmp が全体の記録へ書くのは、チャンクの大きさの変更だけで、配信キー・取り込み先を含まない
 // （接続ごとの記録は、go-rtmp の既定で捨てられる。ConnConfig の Logger は設定しない）。
 //
+// logger は必須。nil は ErrInvalidDeps で、logrus の設定は何も変えない（nil のまま設定すると、外部のライブラリが最初に書いた時点で、
+// そのゴルーチンごと落ちる。捨てる出力先へも、黙って差し替えない）。
+//
 // 戻り値は、元の出力へ戻す関数（試験が使う）。プロセス全体の設定なので、起動時に 1 回だけ呼ぶ。
-func RedirectThirdPartyLogs(logger *slog.Logger) (restore func()) {
+func RedirectThirdPartyLogs(logger *slog.Logger) (restore func(), err error) {
+	if logger == nil {
+		return nil, fmt.Errorf("%w: the logger is required", ErrInvalidDeps)
+	}
 	std := logrus.StandardLogger()
 	previousOut := std.Out
 	previousHooks := std.ReplaceHooks(make(logrus.LevelHooks))
@@ -32,7 +39,7 @@ func RedirectThirdPartyLogs(logger *slog.Logger) (restore func()) {
 	return func() {
 		std.ReplaceHooks(previousHooks)
 		std.SetOutput(previousOut)
-	}
+	}, nil
 }
 
 // slogHook は、logrus の記録を slog へ渡す。

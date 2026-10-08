@@ -237,7 +237,10 @@ func newRelayEnv(t *testing.T, mutate ...func(*server.Deps)) *relayEnv {
 	waiter := &fakeWaiter{}
 	logs, access, errs := &syncBuffer{}, &syncBuffer{}, &syncBuffer{}
 	logger := slog.New(slog.NewJSONHandler(logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	restoreLogs := server.RedirectThirdPartyLogs(logger)
+	restoreLogs, err := server.RedirectThirdPartyLogs(logger)
+	if err != nil {
+		t.Fatalf("RedirectThirdPartyLogs: %v", err)
+	}
 	t.Cleanup(restoreLogs)
 
 	deps := server.Deps{

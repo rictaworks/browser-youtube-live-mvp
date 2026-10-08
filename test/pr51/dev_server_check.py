@@ -19,6 +19,7 @@
   7. 接続から 10 秒 hello が無い -> 致命通知 hello_timeout -> 通常の切断（実時間で 10 秒待つ）
   8. 2 MiB を 1 バイト超えるメッセージ -> 致命通知 message_too_large が先に届き、そのあと Close コード 1009
   9. 壊れたフレーム（識別子が違う）は、破棄されて接続が続く（続けて hello を送ると、照合へ進む）
+ 10. 要求ヘッダが大きすぎる要求（64 KiB）は 431。通常の大きさ（2 KiB）は受け付ける（HTTP サーバーの上限は 16 KiB）
 
 削除系の語は、このファイルに書かない。
 """
@@ -206,6 +207,12 @@ def run_checks(port, skip_slow):
         status, _ = http_request(port, "POST", "/ws")
         check(status == 404, f"POST /ws が {status}（期待 404）")
 
+    def header_limit():
+        status, _ = http_request(port, "GET", "/health", headers={"X-Padding": "a" * 2048})
+        check(status == 200, f"2 KiB のヘッダの GET /health が {status}（期待 200）")
+        status, _ = http_request(port, "GET", "/health", headers={"X-Padding": "a" * 65536})
+        check(status == 431, f"64 KiB のヘッダの GET /health が {status}（期待 431）")
+
     def foreign_origin():
         ws = Ws(port, origin="http://evil.example")
         ws.close()
@@ -262,6 +269,7 @@ def run_checks(port, skip_slow):
 
     step("GET /health が 200 と status ok", health)
     step("WebSocket ではない GET /ws は 400、POST /ws は 404", plain_requests)
+    step("要求ヘッダが大きすぎる要求は 431（上限 16 KiB）", header_limit)
     step("他のオリジンからの WebSocket の接続を受ける", foreign_origin)
     step("形式の不正なチケット -> invalid_ticket -> 切断", malformed_ticket)
     step("存在しないチケット -> 致命通知 -> 切断", unknown_ticket)
